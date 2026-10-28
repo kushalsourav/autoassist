@@ -88,3 +88,7 @@ Thumbs.db
 
 # One-off patch instructions; KEEP the main README.md for GitHub
 README-*.md
+
+# Temporary patch documentation
+/README-*.md
+/READ_ME_FIRST.md
