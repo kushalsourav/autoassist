@@ -1,0 +1,57 @@
+"""Conservative, deterministic v1 intent routing.
+
+This is a transparent keyword gate, NOT a trained NLP intent model. Unknown or
+ambiguous questions receive a clarification rather than a fabricated diagnosis.
+"""
+import re
+
+_AUTOMOTIVE = re.compile(
+    r'\b(car|cars|vehicle|vehicles|automobile|truck|suv|engine|transmission|'
+    r'brake|brakes|airbag|dashboard|headlight|battery|alternator|stalls?|'
+    r'accelerat\w*|ignition|powertrain|recall|nhtsa|vin|mileage|odometer|'
+    r'check.engine|warning light|steering|tire|tyre|clutch|fuel|exhaust|'
+    r'diagnostic|dtc|obd|repair|mechanic|honda|toyota|mercedes|bmw|ford|'
+    r'volkswagen|hyundai|kia|audi|nissan)\b', re.I)
+_NON_AUTO = re.compile(
+    r'\b(tigers?|lions?|elephants?|football|cricket|movie|movies|'
+    r'recipes?|cooking|weather|stock market|politics)\b', re.I)
+_VAGUE_CARS = re.compile(
+    r'\b(how many (cars|vehicles)|tell (me )?about (the )?cars|'
+    r'what about (the )?cars)\b', re.I)
+_FOLLOWUP = re.compile(
+    r'\b(it|that|those|this|same|earlier|previous|safe to drive|'
+    r'what should i do|any more|what about|why|how)\b', re.I)
+
+
+def route_intent(message: str, history: list[dict] | None = None) -> str:
+    """Return automotive, out_of_scope, or clarification.
+
+    A strong unrelated-topic signal wins over generic automotive terms, unless
+    the question also explicitly describes a vehicle. A vague vehicle-count
+    question lacks a dataset or metric and should not trigger recall lookup.
+    """
+    text = message.strip()
+    automotive = bool(_AUTOMOTIVE.search(text))
+    unrelated = bool(_NON_AUTO.search(text))
+    if unrelated and not automotive:
+        return 'out_of_scope'
+    if unrelated and automotive:
+        return 'clarification'
+    if _VAGUE_CARS.search(text) and not re.search(r'\b(recall|dataset|nhtsa|production|registered)\b', text, re.I):
+        return 'clarification'
+    if automotive:
+        return 'automotive'
+    # A follow-up can omit vehicle words, but only if there is prior relevant context.
+    prior_user = [entry.get('content', '') for entry in (history or []) if entry.get('role') == 'user']
+    if prior_user and any(_AUTOMOTIVE.search(p) for p in prior_user) and _FOLLOWUP.search(text):
+        return 'automotive'
+    return 'clarification'
+
+
+def intent_reply(intent: str) -> str:
+    if intent == 'out_of_scope':
+        return ('AutoAssist focuses on vehicle complaints, recalls, and automotive safety. '
+                'I can help investigate an issue with your car, but I am not a general-purpose assistant.')
+    return ('Could you clarify what you want to know about the vehicle? '
+            'For example, share the symptoms, a recall question, or the dataset and metric '
+            'you mean by a vehicle count.')

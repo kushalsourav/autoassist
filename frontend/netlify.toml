@@ -1,0 +1,6 @@
+# Netlify automatically applies its OpenNext adapter for Next.js.
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# Do not add a Vite/SPA catch-all redirect; it breaks Next.js routing.

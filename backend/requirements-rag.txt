@@ -1,0 +1,4 @@
+# Install with: python -m pip install -r backend/requirements-rag.txt
+# Uses existing torch installation; no new CUDA package is needed.
+faiss-cpu>=1.14.2,<2
+sentence-transformers>=5.0,<6

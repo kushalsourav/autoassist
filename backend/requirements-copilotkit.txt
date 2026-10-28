@@ -1,0 +1,5 @@
+# Additional packages for the optional story-first CopilotKit AG-UI server.
+# Install beside backend/requirements.txt in the existing .venv.
+copilotkit>=0.1
+ag-ui-langgraph>=0.0.12
+langchain-core>=0.3

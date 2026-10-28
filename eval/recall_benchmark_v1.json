@@ -1,0 +1,76 @@
+{
+  "version": "v1",
+  "title": "2018 Honda Accord six-campaign recall retrieval pilot",
+  "evaluation_scope": "Rank relevance to the text of owner symptoms among six model-year-listed campaign summaries; NOT VIN status or mechanical diagnosis",
+  "provenance": "Manually paraphrased from public NHTSA recall reports and manufacturer notices; not a literal API payload and not independently expert-adjudicated",
+  "documents": [
+    {
+      "id": "20V771000",
+      "component": "ELECTRICAL SYSTEM:BODY CONTROL MODULE:SOFTWARE",
+      "text": "A Honda Accord Body Control Module (BCM) software problem can interrupt communication with other systems. Possible malfunctions include windshield wipers, windshield defroster, rearview camera display, exterior lighting and turn indicators, audible warnings, and power windows. Honda's remedy is a BCM software update.",
+      "url": "https://static.nhtsa.gov/odi/rcl/2020/RCLRPT-20V771-8488.PDF"
+    },
+    {
+      "id": "18V629000",
+      "component": "BACK OVER PREVENTION: SENSING SYSTEM: CAMERA",
+      "text": "For certain Honda Accord vehicles, the back-up camera center display or rearview camera image may fail to function in some situations. This can prevent the driver seeing behind the car when reversing. The remedy is to reprogram the display audio unit software.",
+      "url": "https://static.nhtsa.gov/odi/rcl/2018/RCRIT-18V629-8399.pdf"
+    },
+    {
+      "id": "20V314000",
+      "component": "FUEL SYSTEM, GASOLINE:DELIVERY:FUEL PUMP",
+      "text": "Certain 2018-2019 Honda Accord vehicles have a low-pressure fuel pump motor defect. The fuel pump impeller may swell, the pump may seize and stop, and the engine may not start or may stall while driving, causing loss of drive power. The remedy is replacement of the fuel pump motor.",
+      "url": "https://static.nhtsa.gov/odi/tsbs/2022/MC-10222422-0001.pdf"
+    },
+    {
+      "id": "23V858000",
+      "component": "FUEL SYSTEM, GASOLINE:DELIVERY:FUEL PUMP",
+      "text": "Certain Honda vehicles including some Accord variants may have an improperly molded fuel-pump impeller that deforms. Fuel pump failure can prevent starting, cause engine hesitation, loss of drive power or engine stalling while driving. A check engine light may illuminate. The remedy is fuel pump module replacement; exact VIN eligibility must be checked.",
+      "url": "https://static.nhtsa.gov/odi/rcl/2023/RCONL-23V858-7033.PDF"
+    },
+    {
+      "id": "23V158000",
+      "component": "SEAT BELTS:FRONT:BUCKLE ASSEMBLY",
+      "text": "Certain 2018-2019 Honda Accord front seat belt buckles may not latch properly because a buckle channel interferes with the release button. A belt that fails to latch cannot restrain the occupant in a crash. Dealers inspect and replace the buckle release button or buckle assembly.",
+      "url": "https://static.nhtsa.gov/odi/rcl/2023/RCAK-23V158-6827.pdf"
+    },
+    {
+      "id": "26V332000",
+      "component": "AIR BAGS:SENSOR:OCCUPANT CLASSIFICATION:FRONT PASSENGER",
+      "text": "The front passenger seat weight sensor printed circuit board can crack and short circuit after humidity exposure. The passenger occupant classification system may fail; the SRS warning light may illuminate and the passenger airbag could deploy inappropriately during a crash, including with a child occupant. The remedy is replacing the seat weight sensor.",
+      "url": "https://static.nhtsa.gov/odi/rcl/2026/RCLRPT-26V332-6150.pdf"
+    }
+  ],
+  "cases": [
+    {"id":"bcm_wipers","query":"The windshield wipers suddenly stop working intermittently during rain.","relevant_ids":["20V771000"]},
+    {"id":"bcm_defroster","query":"My windshield defroster and wipers cut out together.","relevant_ids":["20V771000"]},
+    {"id":"bcm_lighting","query":"Exterior lights and turn signal indicators stop working at random.","relevant_ids":["20V771000"]},
+    {"id":"bcm_windows","query":"My power windows quit and several electrical warning indicators appear.","relevant_ids":["20V771000"]},
+    {"id":"bcm_comm","query":"Body control module communication problem causes multiple electrical accessories to fail.","relevant_ids":["20V771000"]},
+    {"id":"camera_black","query":"Rearview camera shows a black screen when I reverse.","relevant_ids":["20V771000","18V629000"]},
+    {"id":"camera_display","query":"The backup camera center display sometimes has no picture.","relevant_ids":["20V771000","18V629000"]},
+    {"id":"combo_wipers_camera","query":"Windshield wipers quit and rearview camera display goes black.","relevant_ids":["20V771000","18V629000"]},
+    {"id":"id_bcm","query":"What does recall 20V771000 cover?","relevant_ids":["20V771000"]},
+    {"id":"id_camera","query":"Explain campaign 18V629000.","relevant_ids":["18V629000"]},
+    {"id":"camera_audio","query":"Is there a display audio software update for the backup camera?","relevant_ids":["18V629000"]},
+    {"id":"belt_latch","query":"My driver's front seat belt buckle won't latch.","relevant_ids":["23V158000"]},
+    {"id":"belt_release","query":"The front seatbelt release button gets stuck and the buckle cannot click closed.","relevant_ids":["23V158000"]},
+    {"id":"belt_safety","query":"Passenger seat belt appears buckled but does not lock or restrain properly.","relevant_ids":["23V158000"]},
+    {"id":"airbag_sensor","query":"The passenger seat weight classification sensor has an electrical short circuit.","relevant_ids":["26V332000"]},
+    {"id":"airbag_srs","query":"An SRS warning light stays on and the passenger airbag indicator looks wrong.","relevant_ids":["26V332000"]},
+    {"id":"airbag_child","query":"I worry the passenger airbag could deploy when a small child is seated there.","relevant_ids":["26V332000"]},
+    {"id":"fuel_stall","query":"The engine stalls while driving because the fuel pump stops working.","relevant_ids":["20V314000","23V858000"]},
+    {"id":"fuel_loss","query":"Car loses drive power on the highway and the check engine lamp comes on.","relevant_ids":["20V314000","23V858000"]},
+    {"id":"fuel_no_start","query":"The engine will not start after the low pressure fuel pump fails.","relevant_ids":["20V314000","23V858000"]},
+    {"id":"fuel_impeller","query":"Fuel pump impeller deformation might make the engine stall.","relevant_ids":["20V314000","23V858000"]},
+    {"id":"id_fuel","query":"Please explain NHTSA campaign 20V314000.","relevant_ids":["20V314000"]},
+    {"id":"negative_tire","query":"A nail punctured my tire and it loses air overnight.","relevant_ids":[]},
+    {"id":"negative_ac","query":"Cabin air conditioner blows warm even after a refrigerant recharge.","relevant_ids":[]},
+    {"id":"negative_paint","query":"The clear coat paint on the hood is peeling.","relevant_ids":[]},
+    {"id":"negative_sunroof","query":"Sunroof rattles in a crosswind.","relevant_ids":[]},
+    {"id":"negative_glass","query":"Road debris cracked the front windshield glass.","relevant_ids":[]},
+    {"id":"negative_bluetooth","query":"Bluetooth phone pairing fails in the infotainment menu.","relevant_ids":[]},
+    {"id":"negative_oil","query":"What is the recommended engine oil change interval?","relevant_ids":[]},
+    {"id":"negative_seats","query":"The fabric upholstery on my seat is torn.","relevant_ids":[]}
+  ]
+}

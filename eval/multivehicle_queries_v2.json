@@ -1,0 +1,24 @@
+{
+  "version": "multivehicle-v2-draft",
+  "description": "New symptom descriptions for blinded manual relevance review. No relevant campaign IDs are preassigned. These queries are NOT derived from campaign texts and may legitimately have no matching recall.",
+  "cases": [
+    {"id":"honda_wipers_camera","make":"Honda","model":"Accord","year":2018,"query":"My windshield wipers sometimes stop and the reverse camera screen goes black."},
+    {"id":"honda_power_loss","make":"Honda","model":"Accord","year":2018,"query":"Engine hesitates and suddenly loses power when I accelerate onto the highway."},
+    {"id":"honda_seat_latch","make":"Honda","model":"Accord","year":2018,"query":"The front passenger seat belt buckle will not latch consistently."},
+    {"id":"civic_wheel_vibration","make":"Honda","model":"Civic","year":2018,"query":"Steering wheel shakes when I brake at highway speeds."},
+    {"id":"civic_warning","make":"Honda","model":"Civic","year":2018,"query":"The airbag warning indicator stays illuminated after starting the vehicle."},
+    {"id":"civic_noise","make":"Honda","model":"Civic","year":2018,"query":"The cabin makes a squeaking noise when I turn on the air conditioning."},
+    {"id":"camry_stalling","make":"Toyota","model":"Camry","year":2018,"query":"Vehicle intermittently stalls at intersections and is difficult to restart."},
+    {"id":"camry_braking","make":"Toyota","model":"Camry","year":2018,"query":"Brake pedal feels soft and the car takes too long to stop."},
+    {"id":"camry_camera","make":"Toyota","model":"Camry","year":2018,"query":"Rear camera display freezes when I put the car into reverse."},
+    {"id":"f150_electrical","make":"Ford","model":"F-150","year":2018,"query":"Dashboard and exterior lights flicker while driving."},
+    {"id":"f150_drivetrain","make":"Ford","model":"F-150","year":2018,"query":"Truck unexpectedly shifts out of gear and loses propulsion."},
+    {"id":"f150_door","make":"Ford","model":"F-150","year":2018,"query":"The door seems closed but opens unexpectedly while I am driving."},
+    {"id":"silverado_brakes","make":"Chevrolet","model":"Silverado 1500","year":2018,"query":"Brake pedal becomes hard at low speeds and stopping distance increases."},
+    {"id":"silverado_steering","make":"Chevrolet","model":"Silverado 1500","year":2018,"query":"Steering suddenly gets heavy and I have trouble turning the wheel."},
+    {"id":"silverado_camera","make":"Chevrolet","model":"Silverado 1500","year":2018,"query":"My reverse camera intermittently displays a black screen."},
+    {"id":"rogue_airbag","make":"Nissan","model":"Rogue","year":2018,"query":"The passenger airbag warning light remains on when someone sits in front."},
+    {"id":"rogue_power","make":"Nissan","model":"Rogue","year":2018,"query":"The vehicle loses power unexpectedly while merging onto the freeway."},
+    {"id":"rogue_infotainment","make":"Nissan","model":"Rogue","year":2018,"query":"The Bluetooth audio system disconnects when I play music."}
+  ]
+}
