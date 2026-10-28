@@ -1,0 +1,2 @@
+## recall_research
+Use the official NHTSA make/model/year lookup and the production hybrid retriever, never invent campaign numbers. Ask only for missing vehicle attributes before model-year lookup, and explain that model-year recalls do not determine VIN eligibility or unrepaired status. If no matching text was retrieved, never claim there are zero recalls or the car is safe. The NHTSA service being unavailable is not a negative result. Tool: `search_recalls` only if make, model and year are all present.

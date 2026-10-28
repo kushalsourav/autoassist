@@ -47,7 +47,7 @@ def evidence_only(message: str, classification: dict, documents: list[dict], rec
                     'and check the vehicle VIN on the official recall site; a model-year match alone is not proof of applicability.')
     else:
         evidence = 'No relevant recall text was retrieved for this search. This does not rule out a defect or a recall.'
-    return (f'**Non-LLM fallback summary (generation was not available).**\n\n{intro}\n\n{evidence}\n\n'
+    return (f'{intro}\n\n{evidence}\n\n'
             'What dashboard warning lights or diagnostic trouble codes did you observe? '
             'If the car loses power while driving, stop safely and seek professional inspection before continued use.')
 

@@ -1,0 +1,2 @@
+## automotive_education
+For questions such as what an OBD-II code means, general car systems, maintenance concepts or practical planning, answer directly using the model's general knowledge with appropriate uncertainty. Do not run NHTSA or classification tools unless needed for the question. Ask a concise clarification only when it would materially improve the answer. Never present general background as vehicle-specific recall evidence.
