@@ -31,6 +31,19 @@ COPY scripts /app/scripts
 # COPY the ml directory, not ml/artifacts directly: the directory may be absent
 # from Git or excluded by .dockerignore. The model weights must still be supplied.
 COPY ml/ /app/ml/
+# Fail the release build if the saved, snapshot-verified FAISS corpus was not
+# included in the Git/Docker context. Only these three generated files are needed.
+RUN test -s /app/ml/artifacts/recall_corpus_v2/manifest.json \
+    && test -s /app/ml/artifacts/recall_corpus_v2/documents.jsonl \
+    && test -s /app/ml/artifacts/recall_corpus_v2/index.faiss \
+    && echo 'AutoAssist FAISS recall corpus verified in Docker image'
+
+# Download the MiniLM embedding model at BUILD time (not on a user's first
+# retrieval). Both cached query embeddings and fresh FAISS fallback need it.
+ENV HF_HOME=/app/.cache/huggingface
+RUN mkdir -p "$HF_HOME" \
+    && python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cpu'); print('MiniLM embedding model cached')"
+
 # Download the exact tested AutoAssist model revision during the build.
 # The repository must be public for unauthenticated builds; do NOT bake HF tokens into images.
 RUN python -m pip install --no-cache-dir 'huggingface_hub>=0.32,<2' \

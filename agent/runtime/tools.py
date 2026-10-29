@@ -78,15 +78,31 @@ def retrieve_recall_evidence(symptoms: str, runtime: ToolRuntime) -> Command:
                 docs = cached
         except (ImportError, OSError, RuntimeError, ValueError, KeyError):
             log.exception('Verified retrieval cache failed; using live retrieval')
+    # A bad/missing persistent snapshot, transient embedder download failure,
+    # or FAISS runtime error must not terminate a user-facing AG-UI run.
+    retrieval_status = 'ok'
     if docs is None:
-        docs = retrieve(symptoms, records, classification=classification)
+        try:
+            docs = retrieve(symptoms, records, classification=classification)
+        except Exception:
+            log.exception('Live FAISS retrieval failed; falling back to TF-IDF ranking')
+            try:
+                docs = retrieve(symptoms, records, classification=classification, backend='tfidf')
+                retrieval_status = 'tfidf_fallback'
+            except Exception:
+                log.exception('TF-IDF fallback also failed; returning no ranked evidence')
+                docs = []
+                retrieval_status = 'retrieval_unavailable'
     sources = [{'title': f'NHTSA recall {d["id"]} — {d["component"][:65]}',
                 'url': d['url'], 'source_id': d['id'], 'excerpt': d['text'][:320]} for d in docs]
     compact = [{'campaign_id': d['id'], 'component': d['component'],
                 'excerpt': d['text'][:900]} for d in docs]
     return _tool_response(runtime,
                           {'candidates': compact, 'candidate_count': len(compact),
-                           'caveat': 'Retrieved candidates are not verified causes or VIN-specific open recalls.'},
+                           'retrieval_status': retrieval_status,
+                           'caveat': ('Ranking unavailable; do not interpret an empty candidate list as evidence of no recalls.'
+                                      if retrieval_status == 'retrieval_unavailable'
+                                      else 'Retrieved candidates are not verified causes or VIN-specific open recalls.')},
                           {'documents': docs, 'sources': sources, 'stage': 'evidence_retrieved'},
                           'retrieve_recall_evidence', f'Selected {len(docs)} evidence candidates')
 

@@ -1,0 +1,159 @@
+{
+  "version": "v2",
+  "created_utc": "2026-10-28T08:29:18.365842+00:00",
+  "vehicle_inventory": "/home/ashborn/projects/autoassist/eval/vehicles_recall_v2.json",
+  "vehicle_queries": 17,
+  "successful_queries": 15,
+  "failed_queries": 2,
+  "possibly_truncated_queries": 0,
+  "unique_campaigns": 67,
+  "total_listed_vehicle_memberships": 86,
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "limitations": [
+    "Make/model/year listings do not verify VIN eligibility or repair status.",
+    "The current NHTSA fetch adapter retains at most 25 records per vehicle query.",
+    "Some NHTSA requests may fail; check failed_queries before using the corpus.",
+    "No independently annotated relevance judgments exist for this expanded corpus.",
+    "Recall records are not a diagnosis or a repair manual."
+  ],
+  "queries": [
+    {
+      "make": "Honda",
+      "model": "Accord",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 6,
+      "possible_truncation": false
+    },
+    {
+      "make": "Honda",
+      "model": "Civic",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 6,
+      "possible_truncation": false
+    },
+    {
+      "make": "Toyota",
+      "model": "Camry",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 8,
+      "possible_truncation": false
+    },
+    {
+      "make": "Toyota",
+      "model": "Corolla",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 3,
+      "possible_truncation": false
+    },
+    {
+      "make": "Ford",
+      "model": "Escape",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 4,
+      "possible_truncation": false
+    },
+    {
+      "make": "Ford",
+      "model": "F-150",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 19,
+      "possible_truncation": false
+    },
+    {
+      "make": "Chevrolet",
+      "model": "Silverado 1500",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 7,
+      "possible_truncation": false
+    },
+    {
+      "make": "Chevrolet",
+      "model": "Equinox",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 5,
+      "possible_truncation": false
+    },
+    {
+      "make": "Hyundai",
+      "model": "Sonata",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 1,
+      "possible_truncation": false
+    },
+    {
+      "make": "Hyundai",
+      "model": "Elantra",
+      "year": 2018,
+      "status": "unavailable",
+      "records_received": 0,
+      "possible_truncation": false
+    },
+    {
+      "make": "Nissan",
+      "model": "Altima",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 2,
+      "possible_truncation": false
+    },
+    {
+      "make": "Nissan",
+      "model": "Rogue",
+      "year": 2018,
+      "status": "ok",
+      "records_received": 3,
+      "possible_truncation": false
+    },
+    {
+      "make": "Honda",
+      "model": "Accord",
+      "year": 2019,
+      "status": "ok",
+      "records_received": 6,
+      "possible_truncation": false
+    },
+    {
+      "make": "Toyota",
+      "model": "Camry",
+      "year": 2019,
+      "status": "ok",
+      "records_received": 6,
+      "possible_truncation": false
+    },
+    {
+      "make": "Ford",
+      "model": "Escape",
+      "year": 2019,
+      "status": "ok",
+      "records_received": 3,
+      "possible_truncation": false
+    },
+    {
+      "make": "Hyundai",
+      "model": "Sonata",
+      "year": 2019,
+      "status": "unavailable",
+      "records_received": 0,
+      "possible_truncation": false
+    },
+    {
+      "make": "Nissan",
+      "model": "Altima",
+      "year": 2019,
+      "status": "ok",
+      "records_received": 7,
+      "possible_truncation": false
+    }
+  ],
+  "embedding_dimension": 384,
+  "indexed_documents": 67
+}
