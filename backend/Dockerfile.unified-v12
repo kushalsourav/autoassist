@@ -1,0 +1,29 @@
+# Build from repository root:
+# docker build -f backend/Dockerfile.unified-v12 -t autoassist:unified .
+# Defaults to baseline ML + TF-IDF retrieval. Model extras can be enabled below.
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8000
+WORKDIR /app
+COPY backend/requirements*.txt /app/backend/
+RUN python -m pip install --no-cache-dir -r backend/requirements-unified-v12.txt
+# Optional CPU model runtime (build with --build-arg INSTALL_DISTILBERT=true).
+ARG INSTALL_DISTILBERT=false
+RUN if [ "$INSTALL_DISTILBERT" = "true" ]; then \
+      python -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+      python -m pip install --no-cache-dir 'transformers>=4.45,<5'; \
+    fi
+# Optional FAISS RAG runtime (build with --build-arg INSTALL_FAISS=true).
+ARG INSTALL_FAISS=false
+RUN if [ "$INSTALL_FAISS" = "true" ]; then \
+      python -m pip install --no-cache-dir 'faiss-cpu>=1.8,<2' 'sentence-transformers>=3,<6'; \
+    fi
+COPY backend /app/backend
+COPY agent /app/agent
+COPY scripts /app/scripts
+COPY ml/*.py /app/ml/
+COPY ml/artifacts /app/ml/artifacts
+RUN adduser --system --group --uid 10001 appuser && chown -R appuser:appuser /app
+USER appuser
+EXPOSE 8000
+# Single process only: current LangGraph checkpointer is in-memory.
+CMD ["sh", "-c", "exec uvicorn backend.app.main:app --host 0.0.0.0 --workers 1 --port ${PORT:-8000}"]

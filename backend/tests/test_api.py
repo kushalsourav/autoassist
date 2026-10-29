@@ -21,7 +21,11 @@ def test_health_and_first_chat_roundtrip(tmp_path, monkeypatch):
                 'generation_mode': 'evidence_only',
             }
 
-    monkeypatch.setattr(main, 'analysis_graph', FakeGraph())
+    async def fake_run_analysis(request, history, **_kwargs):
+        return await FakeGraph().ainvoke({
+            'vehicle': {'make': request.make, 'model': request.model, 'year': request.year},
+            'message': request.message, 'history': history})
+    monkeypatch.setattr(main, 'run_analysis', fake_run_analysis)
     alice, bob = str(uuid4()), str(uuid4())
     client = TestClient(main.app)
     assert client.get('/api/health').status_code == 200

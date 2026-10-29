@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from agent.rerank_experiment import select_candidates, cross_score_candidates, ranking_metrics
+from evaluation.rerank_experiment import select_candidates, cross_score_candidates, ranking_metrics
 from scripts.evaluate_reranker_v3 import run
 
 VEHICLE={'make':'Honda','model':'Accord','year':2018}

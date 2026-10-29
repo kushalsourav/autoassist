@@ -37,7 +37,7 @@ class AnalyzeResponse(BaseModel):
     classification: Classification
     sources: list[Source]
     recall_status: Literal['ok', 'unavailable', 'missing_vehicle_details', 'not_queried']
-    generation_mode: Literal['llm', 'evidence_only', 'llm_unavailable', 'intent_guardrail']
+    generation_mode: Literal['llm', 'evidence_only', 'llm_unavailable', 'intent_guardrail', 'langchain_agent']
     generation_error: str | None = None
     intent: Literal['automotive', 'out_of_scope', 'clarification'] = 'automotive'
 

@@ -1,0 +1,9 @@
+# Unified API + LangChain agent + AG-UI (one Python server).
+-r requirements.txt
+langchain>=1.3,<2
+langgraph>=1.0,<2
+langchain-openrouter>=0.2,<0.3
+copilotkit>=0.1
+ag-ui-langgraph>=0.0.12
+# Optional for MODEL_VARIANT=multilabel_distilbert_v3: torch + transformers.
+# Optional for RAG_BACKEND=faiss: faiss-cpu + sentence-transformers + numpy.

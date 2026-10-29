@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.config import settings, ROOT
 from backend.app.schemas import AnalyzeRequest, AnalyzeResponse
 from backend.app.storage import SQLiteStore, SupabaseStore
-from agent.workflow import analysis_graph
+from backend.app.agent_analysis import run_analysis
+from backend.app.agent_routes import mount_agent
 
 app = FastAPI(title='AutoAssist', version='0.1.0',
               description='Automotive complaint decision-support prototype; not a mechanical diagnosis.')
@@ -95,11 +96,7 @@ async def analyze(request: AnalyzeRequest, identity=Depends(current_user)):
         raise HTTPException(404, 'Conversation not found')
 
     history = await store.list_messages(owner, chat_id) if chat_id else []
-    state = await analysis_graph.ainvoke({
-        'message': request.message,
-        'history': [{'role': item['role'], 'content': item['content']} for item in history[-8:]],
-        'vehicle': {'make': request.make, 'model': request.model, 'year': request.year},
-    })
+    state = await run_analysis(request, history, owner_id=owner, conversation_id=chat_id or '')
     if not chat_id:
         chat = await store.create_chat(owner, f'{request.year} {request.make} {request.model}: {request.message[:45]}')
         chat_id = chat['id']
@@ -120,3 +117,6 @@ async def analyze(request: AnalyzeRequest, identity=Depends(current_user)):
             'recall_status': state['recall_status'], 'generation_mode': state['generation_mode'],
             'generation_error': state.get('generation_error'),
             'intent': state.get('intent', 'automotive')}
+
+# Same /agent graph and REST API live on this one FastAPI app.
+mount_agent(app)

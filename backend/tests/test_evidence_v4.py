@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.evidence_verifier_v4 import verify_evidence, filter_ranked_evidence
+from evaluation.evidence_verifier_v4 import verify_evidence, filter_ranked_evidence
 from scripts.evaluate_evidence_v4 import evaluate, load_review_and_rankings
 
 

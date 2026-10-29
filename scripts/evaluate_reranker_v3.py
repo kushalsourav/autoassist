@@ -20,7 +20,7 @@ import numpy as np
 
 from agent.corpus_retrieval import _load_corpus
 from agent.rag import _embedding_model
-from agent.rerank_experiment import select_candidates, cross_score_candidates, ranking_metrics
+from evaluation.rerank_experiment import select_candidates, cross_score_candidates, ranking_metrics
 from scripts.build_recall_corpus_v2 import normalize_vehicle, vehicle_key
 from scripts.diagnose_retrieval_v2 import rank_all
 from scripts.evaluate_multivehicle_eval_v2 import read_reviewed_labels, verify_snapshot

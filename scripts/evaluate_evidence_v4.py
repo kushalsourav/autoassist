@@ -15,8 +15,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from agent.evidence_verifier_v4 import filter_ranked_evidence
-from agent.rerank_experiment import ranking_metrics
+from evaluation.evidence_verifier_v4 import filter_ranked_evidence
+from evaluation.rerank_experiment import ranking_metrics
 from scripts.prepare_multivehicle_eval_v2 import DEFAULT_OUT
 
 
