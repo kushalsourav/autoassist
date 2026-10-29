@@ -3,12 +3,13 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import { readLocalThreads, writeLocalThreads, type SavedThread } from './localThreads'
 import Link from 'next/link'
+import BrandLockup from './BrandLockup'
 import ReactMarkdown from 'react-markdown'
 import { useAgent, useCopilotKit } from '@copilotkit/react-core/v2'
 import {
   Activity, ArrowRight, ArrowUp, BookOpen, CarFront, CheckCircle2,
-  Circle, Clock3, Database, ExternalLink, GitBranch, LoaderCircle,
-  MessageCircle, ShieldCheck, Sparkles, StopCircle, UserRound, Plus, Trash2, FileSearch,
+  Clock3, Database, ExternalLink, LoaderCircle,
+  MessageCircle, ShieldCheck, Sparkles, StopCircle, UserRound, Plus, Trash2, FileSearch, Search,
 } from 'lucide-react'
 
 const AGENT_ID = 'autoassist'
@@ -137,6 +138,7 @@ export default function StoryWorkspace() {
   const [liveSteps, setLiveSteps] = useState<LiveStep[]>([])
   const [streamedText, setStreamedText] = useState('')
   const [threadList, setThreadList] = useState<SavedThread[]>([])
+  const [threadQuery, setThreadQuery] = useState('')
   const [activeThread, setActiveThread] = useState('')
   const historyReady = useRef(false)
   const threadRef = useRef<SavedThread[]>([])
@@ -270,18 +272,20 @@ export default function StoryWorkspace() {
   function onSubmit(event: FormEvent) { event.preventDefault(); void send(prompt) }
   return <div className="aa-app">
     <nav className="aa-nav">
-      <Link href="/" className="aa-brand"><span className="aa-brand-mark"><CarFront size={22}/></span><span>autoassist<span className="aa-brand-sub">AUTOMOTIVE INTELLIGENCE</span></span></Link>
-      <div className="aa-nav-items"><Link className="aa-nav-active" href="/"><MessageCircle size={16}/> Assistant</Link><Link href="/model-lab"><BookOpen size={16}/> Model Lab</Link></div>
+      <BrandLockup/>
+      <div className="aa-nav-section-label">WORKSPACE</div>
+      <div className="aa-nav-items"><Link className="aa-nav-active" href="/" aria-current="page"><MessageCircle size={17}/> Assistant</Link><Link href="/model-lab"><BookOpen size={17}/> Model Lab</Link></div>
       <div className="aa-history-header"><strong>Investigations</strong><button onClick={newThread} disabled={running} title="New investigation" aria-label="New investigation"><Plus size={17}/></button></div>
-      <div className="aa-history-list">{threadList.map(thread => <div className={`aa-history-row ${thread.id === activeThread ? 'selected' : ''}`} key={thread.id}>
+      <label className="aa-history-search"><Search size={15}/><input aria-label="Search conversations" value={threadQuery} onChange={event => setThreadQuery(event.target.value)} placeholder="Search conversations"/></label>
+      <div className="aa-history-list">{threadList.filter(thread => thread.title.toLowerCase().includes(threadQuery.toLowerCase())).map(thread => <div className={`aa-history-row ${thread.id === activeThread ? 'selected' : ''}`} key={thread.id}>
         <button className="aa-history-select" onClick={() => openThread(thread)} disabled={running} title={thread.title}>{thread.title}</button>
         <button className="aa-history-delete" onClick={() => deleteThread(thread.id)} disabled={running} aria-label={`Delete ${thread.title}`} title="Delete saved conversation"><Trash2 size={13}/></button>
       </div>)}</div>
       <div className="aa-history-note">Saved in this browser for local development only.</div>
-      <div className="aa-nav-footer"><ShieldCheck size={16}/> Evidence-first AI <span>Prototype · Local</span></div>
+      <div className="aa-nav-footer"><span className="aa-footer-icon"><ShieldCheck size={17}/></span><div><strong>Evidence-first AI</strong><small>Prototype · Local workspace</small></div></div>
     </nav>
     <main className="aa-main">
-      <header className="aa-topbar"><div className="aa-location"><span className="aa-online-dot"/> AI investigation workspace <ArrowRight size={14}/><strong>Assistant</strong></div><div className="aa-topbar-right"><GitBranch size={15}/> LangGraph + CopilotKit</div></header>
+      <header className="aa-topbar"><div className="aa-location"><span className="aa-location-icon"><MessageCircle size={16}/></span><span>Workspace</span><ArrowRight size={13}/><strong>Assistant</strong></div><div className="aa-topbar-right"><span className="aa-runtime-pill"><span className="aa-online-dot"/> LangGraph connected</span></div></header>
       <div className="aa-main-inner">
         <div className="aa-chat-area">
           {state.vehicle && Object.keys(state.vehicle).length > 0 && <div className="aa-vehicle-chip"><CarFront size={14}/> {[state.vehicle.year, state.vehicle.make, state.vehicle.model].filter(Boolean).join(' ')}</div>}
@@ -315,8 +319,8 @@ export default function StoryWorkspace() {
               </div>
             </article>)}
             {running && <div className="aa-processing">
-              {streamedText && messages[messages.length - 1]?.role === 'user' ? <div className="aa-stream-bubble"><div className="aa-card-eyebrow"><Sparkles size={13}/> AutoAssist · streaming</div><div className="aa-markdown"><ReactMarkdown>{streamedText}</ReactMarkdown></div></div>
-                : <><LoaderCircle size={15} className="aa-spin"/> Investigating with the agent…</>}
+              {streamedText && messages[messages.length - 1]?.role === 'user' ? <div className="aa-stream-bubble"><div className="aa-card-eyebrow"><span className="aa-stream-live-dot"/><Sparkles size={13}/> AutoAssist · streaming answer</div><div className="aa-markdown"><ReactMarkdown>{streamedText}</ReactMarkdown></div></div>
+                : <><LoaderCircle size={15} className="aa-spin"/> {liveSteps.length ? `Agent: ${readableStep(liveSteps[liveSteps.length - 1].name)}…` : 'Preparing your investigation…'}</>}
             </div>}
             <div ref={bottom}/>
           </div>
