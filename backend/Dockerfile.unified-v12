@@ -20,8 +20,8 @@ RUN if [ "$INSTALL_FAISS" = "true" ]; then \
 COPY backend /app/backend
 COPY agent /app/agent
 COPY scripts /app/scripts
-COPY ml/*.py /app/ml/
-COPY ml/artifacts /app/ml/artifacts
+COPY ml/ /app/ml/
+RUN mkdir -p /app/ml/artifacts
 RUN adduser --system --group --uid 10001 appuser && chown -R appuser:appuser /app
 USER appuser
 EXPOSE 8000
