@@ -31,8 +31,16 @@ COPY scripts /app/scripts
 # COPY the ml directory, not ml/artifacts directly: the directory may be absent
 # from Git or excluded by .dockerignore. The model weights must still be supplied.
 COPY ml/ /app/ml/
-RUN mkdir -p /app/ml/artifacts \
-    && python -c "from pathlib import Path; p=Path('/app/ml/artifacts/multilabel_distilbert_v3'); print('Model artifact directory:', 'included' if p.is_dir() else 'MISSING — trained model will not load until supplied')"
+# Download the exact tested AutoAssist model revision during the build.
+# The repository must be public for unauthenticated builds; do NOT bake HF tokens into images.
+RUN python -m pip install --no-cache-dir 'huggingface_hub>=0.32,<2' \
+    && mkdir -p /app/ml/artifacts/multilabel_distilbert_v3 \
+    && python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='2ashborn12/autoassist-distilbert-v3', revision='fa3a10b4314b119aefe444f71608fef4a0620bec', local_dir='/app/ml/artifacts/multilabel_distilbert_v3', allow_patterns=['model.safetensors', 'config.json', 'metrics.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json', 'vocab.txt'])" \
+    && test -s /app/ml/artifacts/multilabel_distilbert_v3/model.safetensors \
+    && test -s /app/ml/artifacts/multilabel_distilbert_v3/config.json \
+    && test -s /app/ml/artifacts/multilabel_distilbert_v3/tokenizer.json \
+    && test -s /app/ml/artifacts/multilabel_distilbert_v3/metrics.json \
+    && echo 'AutoAssist DistilBERT v3 artifacts verified in Docker image'
 
 RUN adduser --system --group --uid 10001 appuser \
     && chown -R appuser:appuser /app
