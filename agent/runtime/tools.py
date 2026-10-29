@@ -45,14 +45,31 @@ async def search_nhtsa_recalls(make: str, model: str, year: int, runtime: ToolRu
                               {'recall_status': 'not_queried', 'recalls': []},
                               'search_nhtsa_recalls', 'Vehicle details were not verified in user messages')
     records, status = await fetch_recalls(vehicle['make'], vehicle['model'], vehicle['year'])
+    # Critical distinction: 0 is a valid count ONLY after a successful API response.
+    # An unavailable lookup has no known count and cannot support a 'no recalls' claim.
+    count = len(records) if status == 'ok' else None
+    if status != 'ok':
+        next_step = ('NHTSA lookup FAILED/UNAVAILABLE. Do not say no recalls were found, '
+                     'do not infer zero campaigns, and do not call retrieval. '
+                     'Tell the user the recall search could not be completed and offer to retry '
+                     'or check https://www.nhtsa.gov/recalls using their VIN.')
+        summary = 'NHTSA lookup unavailable; recall count unknown'
+    elif count == 0:
+        next_step = ('Successful NHTSA model-year search returned zero campaigns. '
+                     'No records to rank. This does not verify VIN-specific recall or repair status.')
+        summary = 'NHTSA lookup succeeded; zero model-year campaigns returned'
+    else:
+        next_step = 'Successful NHTSA lookup. Call retrieve_recall_evidence for symptom relevance.'
+        summary = f'NHTSA lookup succeeded; {count} model-year campaigns returned'
     # The full records remain in agent state for evidence retrieval; only a compact summary goes to LLM.
     return _tool_response(runtime,
-                          {'status': status, 'model_year_records': len(records), 'vehicle': vehicle,
+                          {'status': status, 'model_year_records': count, 'vehicle': vehicle,
                            'scope': 'Make/model/year only; VIN and repair status unverified',
-                           'next_step': 'Call retrieve_recall_evidence for symptom relevance.'},
-                          {'vehicle': vehicle, 'recalls': records, 'recall_status': status,
-                           'documents': [], 'sources': [], 'stage': 'recalls_checked'},
-                          'search_nhtsa_recalls', f'NHTSA returned {len(records)} model-year records (status={status})')
+                           'next_step': next_step},
+                          {'vehicle': vehicle, 'recalls': records if status == 'ok' else [],
+                           'recall_status': status, 'documents': [], 'sources': [],
+                           'stage': 'recalls_checked'},
+                          'search_nhtsa_recalls', summary)
 
 
 @tool
@@ -62,7 +79,10 @@ def retrieve_recall_evidence(symptoms: str, runtime: ToolRuntime) -> Command:
     records = state.get('recalls') or []
     if state.get('recall_status') != 'ok':
         return _tool_response(runtime,
-                              {'status': 'no_successful_lookup', 'candidates': []},
+                              {'status': 'no_successful_lookup', 'lookup_status': state.get('recall_status', 'not_queried'),
+                               'candidates': [], 'candidate_count': None,
+                               'message': ('No successful NHTSA lookup. Recall count is UNKNOWN. '
+                                           'Do not claim zero recalls or no campaigns found.')},
                               {'documents': [], 'sources': []}, 'retrieve_recall_evidence',
                               'No successful NHTSA lookup available for ranking')
     classification = state.get('classification') or None

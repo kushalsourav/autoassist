@@ -11,6 +11,7 @@ export default function ModelStreamViewer({items, running}: {items:StreamItem[];
   }, [items, running])
   const reason = items.filter(e=>e.kind==='reasoning')
   const tools = items.filter(e=>e.kind==='tool-request'||e.kind==='tool-args'||e.kind==='tool-result')
+  const completedTools = new Set(tools.filter(t=>t.kind==='tool-result').map(t=>t.runId))
   const models = items.filter(e=>e.kind==='model')
   const usage = items.filter(e=>e.kind==='usage')
   const chunks = reason.reduce((count,item)=>count+item.fragments,0)
@@ -18,7 +19,7 @@ export default function ModelStreamViewer({items, running}: {items:StreamItem[];
     <summary>
       <span className="aa-v10-icon"><BrainCircuit size={17}/></span>
       <span className="aa-v10-heading"><strong>Live AI activity</strong><small>{models.at(-1)?.text || 'LangChain create_agent · OpenRouter'}</small></span>
-      <span className={`aa-v10-status ${running?'running':''}`}>{running?<><LoaderCircle size={13} className="aa-spin"/> Streaming</>:<><CheckCircle2 size={13}/> Completed</>}</span>
+      <span className={`aa-v10-status ${running?'running':''}`}>{running?<><LoaderCircle size={13} className="aa-spin"/> Streaming</>:<><Activity size={13}/> Stream ended</>}</span>
       <ChevronDown size={15}/>
     </summary>
     <div className="aa-v10-body" ref={viewport} role="log" aria-live="off">
@@ -33,7 +34,7 @@ export default function ModelStreamViewer({items, running}: {items:StreamItem[];
         <span>{item.kind==='tool-request'?<Wrench size={13}/>:item.kind==='tool-result'?<CheckCircle2 size={13}/>:<Activity size={13}/>}</span>
         <div><strong>{item.kind==='tool-request'?`Called ${item.label}`:item.label}</strong>
           {item.kind!=='tool-request'&&<pre>{item.text}</pre>}
-          {item.kind==='tool-request'&&<small>Waiting for tool execution/result</small>}
+          {item.kind==='tool-request'&&<small>{completedTools.has(item.runId) ? 'Result received' : running ? 'Waiting for tool result' : 'No tool result observed (possibly interrupted)'}</small>}
         </div>
       </div>)}</div> : <p className="aa-v10-muted">{running?'No tool requested yet.':'The agent answered directly; no tool was called.'}</p>}
       {usage.length>0&&<div className="aa-v10-usage"><Cpu size={13}/>{usage.at(-1)?.text}</div>}

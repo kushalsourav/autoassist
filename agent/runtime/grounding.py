@@ -26,7 +26,34 @@ def _vehicle_authorized(make: str, model: str, year: int, state: dict) -> bool:
              year == previous.get('year')))
 
 
-def _ground_answer(text: str, docs: list[dict]) -> str:
+# Negative recall assertions are not allowed when the lookup itself failed.
+# This is a last-resort guard; the model prompt/tool result must also be correct
+# because an AG-UI client may display streamed tokens before after_agent runs.
+_UNAVAILABLE_NO_RECALL_CLAIM = re.compile(
+    r'\b(?:no|zero|0)\s+(?:(?:open|relevant|nhtsa|safety|federal|model.year)\s+)*'
+    r'(?:recalls?|campaigns?|model.year records?)\b|'
+    r'\b(?:no|none)\s+(?:recalls?|campaigns?)\s+(?:were\s+)?(?:found|returned|listed|identified)\b|'
+    r'\b(?:recalls?|campaigns?)\s+(?:were\s+)?not\s+found\b|'
+    r'\b(?:recalls?|campaigns?)\s+(?:were\s+)?(?:not found|absent)\b|'
+    r'\b(?:lookup|search)\s+(?:returned|found|showed|identified)\s+(?:no|zero|0)\b',
+    flags=re.I,
+)
+
+_UNAVAILABLE_SAFE_ANSWER = (
+    "**NHTSA recall lookup unavailable.** I couldn't complete the model-year recall "
+    "search, so the number of campaigns is unknown. This does **not** mean there "
+    "are no recalls or safety defects. You can retry or check your vehicle's VIN "
+    "at https://www.nhtsa.gov/recalls.\n\n"
+    "For potentially safety-related symptoms, arrange a qualified "
+    "inspection; the symptom classifier is not a mechanical diagnosis."
+)
+
+
+def _ground_answer(text: str, docs: list[dict], recall_status: str = 'not_queried') -> str:
+    if recall_status == 'unavailable' and _UNAVAILABLE_NO_RECALL_CLAIM.search(text):
+        # Replace rather than regex-editing natural language: a misleading claim
+        # might be restated in another sentence or heading.
+        return _UNAVAILABLE_SAFE_ANSWER
     allowed = {str(d.get('id', '')).upper() for d in docs}
     result = re.sub(r'\b\d{2}V\d{6}\b',
                     lambda m: m.group(0) if m.group(0).upper() in allowed else '[unverified campaign ID omitted]',

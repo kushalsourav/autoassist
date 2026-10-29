@@ -1,5 +1,8 @@
 """NHTSA US-market vehicle recall lookup. Recall hits are not verified diagnoses."""
 import httpx
+import logging
+
+log = logging.getLogger(__name__)
 
 API_URL = 'https://api.nhtsa.gov/recalls/recallsByVehicle'
 
@@ -29,5 +32,8 @@ async def fetch_recalls(make: str, model: str, year: int) -> tuple[list[dict], s
                 'url': source_url,
             })
         return output, 'ok'
-    except (httpx.HTTPError, ValueError, TypeError):
+    except (httpx.HTTPError, ValueError, TypeError) as exc:
+        # This is a failed lookup, never a successful zero-result response.
+        log.warning('NHTSA recall lookup unavailable for %s %s %s: %s: %s',
+                    year, make, model, type(exc).__name__, str(exc)[:250])
         return [], 'unavailable'

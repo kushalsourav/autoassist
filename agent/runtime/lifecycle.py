@@ -20,7 +20,8 @@ def _snapshot(state: StoryState, turn: int) -> dict:
             'recall_status': state.get('recall_status', 'not_queried'),
             'sources': state.get('sources', []),
             'evidence_summary': {'lookup_status': state.get('recall_status', 'not_queried'),
-                                 'model_year_records': len(state.get('recalls') or []),
+                                 'model_year_records': (len(state.get('recalls') or [])
+                                                        if state.get('recall_status') == 'ok' else None),
                                  'retrieved_candidates': len(state.get('documents') or []),
                                  'lookup_scope': 'make_model_year', 'vin_eligibility_checked': False,
                                  'repair_status_checked': False},
@@ -40,7 +41,8 @@ def finish_investigation(state: StoryState, runtime: Runtime) -> dict:
         answer_text = (final.content if isinstance(final.content, str) else
                        ''.join(str(b.get('text', '')) for b in final.content
                                if isinstance(b, dict) and b.get('type') == 'text'))
-        grounded = _ground_answer(answer_text, state.get('documents', []))
+        grounded = _ground_answer(answer_text, state.get('documents', []),
+                                  recall_status=state.get('recall_status', 'not_queried'))
         result['answer'] = grounded
         if grounded != final.content:
             result['messages'] = [final.model_copy(update={'content': grounded})]
