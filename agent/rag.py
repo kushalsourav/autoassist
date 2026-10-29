@@ -92,18 +92,25 @@ def _faiss_retrieve(query: str, documents: list[dict], top_k: int,
 # VISIBILITY/WIPER and BACK OVER PREVENTION are not currently mapped to Electrical,
 # even when their recall narrative mentions BCM/software and camera failures.
 # Do not let the component gate discard strong text evidence before ranking.
+#
+# Critically, do NOT put common symptom-description words here — terms like
+# "engine", "power", "light", "fuel", "accelerat*" are exactly what NHTSA
+# recall narratives share with user-reported symptoms. Removing them leaves
+# zero shared terms between the query and every document, defeating the lexical
+# rescue path entirely.
 _LEXICAL_STOP = frozenset({
     'about', 'after', 'again', 'also', 'always', 'another', 'because', 'been',
-    'before', 'black', 'could', 'does', 'during', 'each', 'every', 'from', 'have',
-    'having', 'into', 'intermittent', 'intermittently', 'just', 'light', 'lights',
-    'losing', 'many', 'might', 'more', 'most', 'often', 'once', 'only', 'other',
-    'power', 'problem', 'problems', 'reported', 'same', 'some', 'sometimes',
+    'before', 'could', 'does', 'during', 'each', 'every', 'from', 'have',
+    'having', 'into', 'intermittent', 'intermittently', 'just',
+    'many', 'might', 'more', 'most', 'often', 'once', 'only', 'other',
+    'problem', 'problems', 'reported', 'same', 'some', 'sometimes',
     'stop', 'stopped', 'stops', 'such', 'than', 'that', 'their', 'them', 'there',
-    'these', 'this', 'those', 'through', 'under', 'very', 'vehicle', 'vehicles',
+    'these', 'this', 'those', 'through', 'under', 'very',
     'were', 'what', 'when', 'where', 'which', 'while', 'with', 'work', 'working',
     'would', 'your', 'recall', 'recalls', 'campaign', 'number', 'issue', 'issues',
-    'system', 'systems', 'software', 'model', 'year', 'certain', 'honda', 'car',
+    'model', 'year', 'certain', 'honda', 'car',
     'cars', 'may', 'will', 'the', 'and', 'are', 'for', 'not', 'has', 'had', 'can',
+    'certain', 'equipped', 'affected', 'vehicles', 'vehicle',
 })
 
 
@@ -121,20 +128,30 @@ def _matching_terms(query: str, document: dict) -> list[str]:
 def _faiss_hybrid_retrieve(query: str, documents: list[dict], top_k: int,
                            threshold: float, classification: dict | None,
                            embedder=None) -> list[dict]:
-    """FAISS first, then weak-label gate OR corroborating narrative evidence.
+    """FAISS semantic ranking with component-metadata and lexical rescue gates.
 
-    A strong two-term narrative match can rescue an otherwise excluded record,
-    including a relevant hit with an embedding score below a provisional cutoff.
+    Eligibility: All documents pass to FAISS unless the component filter
+    explicitly *rejects* them AND they have no lexical overlap with the query.
+    This is intentionally permissive at the eligibility stage — FAISS cosine
+    similarity does the actual relevance ranking, and the threshold gate at the
+    end removes low-quality matches.  Over-filtering at eligibility is worse
+    than under-filtering because it silently drops genuinely relevant records.
+
+    Keep policy: a candidate is kept if:
+      * It was explicitly requested by campaign ID (always keep), OR
+      * It has ≥2 shared non-stopword terms with the query (lexical rescue), OR
+      * It passes the component metadata gate AND its cosine score ≥ threshold.
+
     No matching campaign is ever fabricated if NHTSA returned none.
     """
-    # Cheap eligibility screening avoids loading the embedding model for
-    # known-unrelated campaigns and rescues literal symptom matches beforehand.
-    eligible = [doc for doc in documents
-                if _component_filter(query, [doc], classification)
-                or len(_matching_terms(query, doc)) >= 2]
-    if not eligible:
+    # Cheap eligibility: run FAISS on all documents. The component filter is
+    # used only at the keep stage, not as a pre-filter gate, so that FAISS can
+    # find semantically relevant records even when weak-label categories disagree
+    # with NHTSA's official component taxonomy (e.g. "Engine/Fuel" symptoms
+    # matching a POWERTRAIN:TCM recall that the label model missed).
+    if not documents:
         return []
-    candidates = _faiss_retrieve(query, eligible, top_k=len(eligible),
+    candidates = _faiss_retrieve(query, documents, top_k=len(documents),
                                  threshold=-2.0, embedder=embedder)
     keep = []
     for row in candidates:
@@ -144,9 +161,15 @@ def _faiss_hybrid_retrieve(query: str, documents: list[dict], top_k: int,
         narrative_accepts = len(matched_terms) >= 2
         if explicit_id or narrative_accepts or (row['score'] >= threshold and metadata_accepts):
             keep.append((row, matched_terms, explicit_id))
+        elif row['score'] >= threshold:
+            # Component filter disagreed but semantic similarity is high — keep
+            # with a slightly raised bar: require score above a stricter cutoff
+            # rather than silently discarding. This rescues records where the
+            # weak-label category simply does not cover the recall's component.
+            if row['score'] >= max(threshold, 0.25):
+                keep.append((row, matched_terms, explicit_id))
 
     # Deduplicate campaigns that appear under multiple official component names.
-    # Prefer more narrative evidence, then cosine score; do not alter cosine scores.
     keep.sort(key=lambda x: (bool(x[2]), min(len(x[1]), 5), x[0]['score']), reverse=True)
     output = []
     seen = set()

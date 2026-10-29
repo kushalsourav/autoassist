@@ -11,7 +11,7 @@ import { useAgent, useCopilotKit } from '@copilotkit/react-core/v2'
 import {
   Activity, ArrowRight, ArrowUp, BookOpen, CarFront, CheckCircle2,
   Clock3, Database, ExternalLink, LoaderCircle,
-  MessageCircle, ShieldCheck, Sparkles, StopCircle, UserRound, Plus, Trash2, FileSearch, Search, GitBranch,
+  MessageCircle, ShieldCheck, Sparkles, StopCircle, UserRound, Plus, Trash2, FileSearch, Search, GitBranch, Cpu,
 } from 'lucide-react'
 
 const AGENT_ID = 'autoassist'
@@ -24,18 +24,45 @@ const EXAMPLES = [
   'My brake pedal feels unusually hard and stopping takes longer.',
 ]
 
+// ── Model / provider switcher ─────────────────────────────────────────────────
+type Provider = 'anthropic' | 'openrouter'
+
+const ANTHROPIC_MODELS = [
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 · fast (default)' },
+] as const
+
+const PROVIDER_STORAGE_KEY = 'autoassist_provider'
+const ANTHROPIC_MODEL_STORAGE_KEY = 'autoassist_anthropic_model'
+
+function readProvider(): Provider {
+  try {
+    const v = localStorage.getItem(PROVIDER_STORAGE_KEY)
+    if (v === 'anthropic' || v === 'openrouter') return v
+  } catch { /* SSR / private mode */ }
+  return 'anthropic'
+}
+function saveProvider(p: Provider) {
+  try { localStorage.setItem(PROVIDER_STORAGE_KEY, p) } catch { /* ignore */ }
+}
+function readAnthropicModel(): string {
+  try { return localStorage.getItem(ANTHROPIC_MODEL_STORAGE_KEY) || ANTHROPIC_MODELS[0].id } catch { return ANTHROPIC_MODELS[0].id }
+}
+function saveAnthropicModel(m: string) {
+  try { localStorage.setItem(ANTHROPIC_MODEL_STORAGE_KEY, m) } catch { /* ignore */ }
+}
+
 type Vehicle = { make?: string; model?: string; year?: number }
 type Label = { category: string; score: number }
 type Classification = { category?: string; confidence?: number | null; labels?: Label[]; method?: string }
 type Source = { title: string; url: string; source_id: string; excerpt: string }
 type EvidenceSummary = { lookup_status?: string; model_year_records?: number; retrieved_candidates?: number; lookup_scope?: string; vin_eligibility_checked?: boolean; repair_status_checked?: boolean }
-type ToolEvent = {tool: string; status: string; summary: string}
+type ToolEvent = { tool: string; status: string; summary: string }
 type UiState = {
   stage?: string
   vehicle?: Vehicle
   skill?: string
   intent?: string
-  plan?: {action?: string; skill?: string}
+  plan?: { action?: string; skill?: string }
   classification?: Classification
   recall_status?: string
   sources?: Source[]
@@ -44,7 +71,7 @@ type UiState = {
   tool_events?: ToolEvent[]
   followups?: string[]
   evidence_summary?: EvidenceSummary
-  result_history?: (UiState & {turn: number})[]
+  result_history?: (UiState & { turn: number })[]
 }
 
 type LiveStep = { name: string; status: 'running' | 'complete'; started: number; durationMs?: number }
@@ -68,18 +95,27 @@ function messageContent(value: unknown): string {
 }
 
 function EvidenceCard({ source }: { source: Source }) {
-  // Only render an official destination; never treat a retrieved URL as trusted HTML.
   let url: string | null = null
   try {
     const destination = new URL(source.url)
-    if (destination.protocol === 'https:' && (destination.hostname === 'nhtsa.gov' || destination.hostname.endsWith('.nhtsa.gov'))) url = destination.href
-  } catch { /* Invalid source link: show source text without an outgoing link. */ }
+    if (destination.protocol === 'https:' && (destination.hostname === 'nhtsa.gov' || destination.hostname.endsWith('.nhtsa.gov'))) {
+      url = destination.href
+    }
+  } catch { /* Invalid source link */ }
+
   return (
     <article className="aa-evidence">
-      <div className="aa-evidence-top"><span>NHTSA · {source.source_id}</span><FileSearch size={15}/></div>
+      <div className="aa-evidence-top">
+        <span>NHTSA · {source.source_id}</span>
+        <FileSearch size={14} />
+      </div>
       <div className="aa-evidence-title">{source.title.replace(/^NHTSA recall \S+ — /, '')}</div>
-      <p>{source.excerpt.length > 220 ? `${source.excerpt.slice(0, 220)}…` : source.excerpt}</p>
-      {url && <a href={url} target="_blank" rel="noreferrer">Read official NHTSA record <ExternalLink size={13}/></a>}
+      <p>{source.excerpt.length > 200 ? `${source.excerpt.slice(0, 200)}…` : source.excerpt}</p>
+      {url && (
+        <a href={url} target="_blank" rel="noreferrer">
+          Official NHTSA campaign <ExternalLink size={12} />
+        </a>
+      )}
     </article>
   )
 }
@@ -90,31 +126,70 @@ function ResultsUI({ state }: { state: UiState }) {
   const evidence = state.evidence_summary
   const lookupStatus = evidence?.lookup_status || state.recall_status || 'not_queried'
   const checked = lookupStatus !== 'not_queried'
-  if (!category && !checked) return null
+  if (!category && !checked && !sources.length) return null
+
   return (
     <div className="aa-results aa-v5-results">
-      {category && <section className="aa-result-card">
-        <div className="aa-card-eyebrow"><Activity size={14}/> ML MODEL SIGNAL · REPORTED COMPONENT</div>
-        <div className="aa-classification-row"><strong>{category}</strong>
-          {typeof state.classification?.confidence === 'number' &&
-            <span>{(state.classification.confidence * 100).toFixed(1)} model score</span>}
-        </div>
-        {typeof state.classification?.confidence === 'number' &&
-          <div className="aa-score-track" role="meter" aria-label={`${category} model score`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.classification.confidence * 100)}><div style={{width:`${Math.min(100, Math.max(0, state.classification.confidence * 100))}%`}}/></div>}
-        <div className="aa-caption">Trained on weak owner-complaint labels. This score is neither a calibrated probability nor a mechanical diagnosis.</div>
-      </section>}
-      {checked && <section className="aa-result-card aa-recall-results">
-        <div className="aa-card-eyebrow"><Database size={14}/> NHTSA LOOKUP · MODEL-YEAR SCOPE</div>
-        {lookupStatus === 'unavailable' ?
-          <p className="aa-v5-evidence-line"><strong>Lookup unavailable.</strong> No conclusion about recalls can be drawn from this attempt.</p> :
-          <div className="aa-v5-evidence-facts">
-            <span><b>{typeof evidence?.model_year_records === 'number' ? evidence.model_year_records : '—'}</b> model-year records returned</span>
-            <span><b>{typeof evidence?.retrieved_candidates === 'number' ? evidence.retrieved_candidates : sources.length}</b> retrieved research candidates</span>
-          </div>}
-        {sources.length ? <details className="aa-source-details"><summary>Inspect {sources.length} candidate source{sources.length === 1 ? '' : 's'}</summary><div className="aa-source-grid">{sources.map((source, index) => <EvidenceCard key={`${source.source_id}-${index}`} source={source}/>)}</div></details> :
-          lookupStatus !== 'unavailable' && <p className="aa-small">No sufficiently relevant candidate was selected by the retriever. This does not establish that the vehicle has no recalls.</p>}
-        <div className="aa-v5-evidence-limit"><ShieldCheck size={14}/><span>Retrieved documents are <strong>not verified causes</strong>. Make/model/year matching does not establish VIN eligibility or whether a repair is outstanding.</span></div>
-      </section>}
+      {category && (
+        <section className="aa-result-card">
+          <div className="aa-card-eyebrow">
+            <Activity size={14} /> ML MODEL SIGNAL · REPORTED COMPONENT
+          </div>
+          <div className="aa-classification-row">
+            <strong>{category}</strong>
+            {typeof state.classification?.confidence === 'number' && (
+              <span>{(state.classification.confidence * 100).toFixed(1)}% model score</span>
+            )}
+          </div>
+          {typeof state.classification?.confidence === 'number' && (
+            <div
+              className="aa-score-track"
+              role="meter"
+              aria-label={`${category} model score`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(state.classification.confidence * 100)}
+            >
+              <div style={{ width: `${Math.min(100, Math.max(0, state.classification.confidence * 100))}%` }} />
+            </div>
+          )}
+          <div className="aa-caption">Trained on weak owner-complaint labels. Score indicates taxonomy match, not a mechanical inspection.</div>
+        </section>
+      )}
+
+      {checked && (
+        <section className="aa-result-card aa-recall-results">
+          <div className="aa-card-eyebrow">
+            <Database size={14} /> NHTSA SAFETY RECALL EVIDENCE
+          </div>
+          {lookupStatus === 'unavailable' ? (
+            <p className="aa-v5-evidence-line"><strong>Lookup unavailable.</strong> NHTSA recall database could not be reached.</p>
+          ) : (
+            <div className="aa-v5-evidence-facts">
+              <span><b>{typeof evidence?.model_year_records === 'number' ? evidence.model_year_records : '—'}</b> model-year records found</span>
+              <span><b>{typeof evidence?.retrieved_candidates === 'number' ? evidence.retrieved_candidates : sources.length}</b> candidate campaigns reviewed</span>
+            </div>
+          )}
+          {sources.length ? (
+            <details className="aa-source-details" open>
+              <summary>Verified evidence records ({sources.length})</summary>
+              <div className="aa-source-grid">
+                {sources.map((source, index) => (
+                  <EvidenceCard key={`${source.source_id}-${index}`} source={source} />
+                ))}
+              </div>
+            </details>
+          ) : (
+            lookupStatus !== 'unavailable' && (
+              <p className="aa-small">No recall campaigns specifically matched the symptoms. This does not confirm the absence of vehicle recalls.</p>
+            )
+          )}
+          <div className="aa-v5-evidence-limit">
+            <ShieldCheck size={14} />
+            <span>Retrieved documents are <strong>not verified causes</strong>. Make/model/year lookup does not verify VIN repair status.</span>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -122,53 +197,138 @@ function ResultsUI({ state }: { state: UiState }) {
 function TurnTrace({ steps, tools }: { steps: LiveStep[]; tools: ToolEvent[] }) {
   if (!steps.length && !tools.length) return null
   const toolSummaries = new Map(tools.map(event => [event.tool, event]))
-  return <details className="aa-turn-trace aa-v5-turn-trace">
-    <summary><GitBranch size={14}/> View agent steps <span>{steps.length ? `${steps.length} observed` : `${tools.length} tools`}</span></summary>
-    <div className="aa-v5-trace-content">
-      {steps.length > 0 ? steps.map((step, idx) => {
-        const tool = toolSummaries.get(step.name)
-        return <div className="aa-v5-trace-row" key={`${step.name}-${idx}`}>
-          {step.status === 'complete' ? <CheckCircle2 size={15}/> : <LoaderCircle size={15}/>}
-          <div><strong>{readableStep(step.name)}</strong>{tool && <p>{tool.summary}</p>}</div>
-          {step.durationMs !== undefined && <small>{step.durationMs} ms</small>}
+
+  return (
+    <details className="aa-turn-trace aa-v5-turn-trace">
+      <summary>
+        <GitBranch size={14} />
+        <span>View agent execution path</span>
+        <span className="aa-trace-pill">{steps.length ? `${steps.length} steps` : `${tools.length} tools`}</span>
+      </summary>
+      <div className="aa-v5-trace-content">
+        {steps.length > 0 ? (
+          steps.map((step, idx) => {
+            const tool = toolSummaries.get(step.name)
+            return (
+              <div className="aa-v5-trace-row" key={`${step.name}-${idx}`}>
+                {step.status === 'complete' ? <CheckCircle2 size={14} /> : <LoaderCircle size={14} className="aa-spin" />}
+                <div>
+                  <strong>{readableStep(step.name)}</strong>
+                  {tool && <p>{tool.summary}</p>}
+                </div>
+                {step.durationMs !== undefined && <small>{step.durationMs} ms</small>}
+              </div>
+            )
+          })
+        ) : (
+          tools.map((tool, idx) => (
+            <div className="aa-v5-trace-row" key={`${tool.tool}-${idx}`}>
+              <CheckCircle2 size={14} />
+              <div>
+                <strong>{readableStep(tool.tool)}</strong>
+                <p>{tool.summary}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </details>
+  )
+}
+
+function ModelSwitcher({
+  provider, onProvider,
+  anthropicModel, onAnthropicModel,
+  disabled,
+}: {
+  provider: Provider
+  onProvider: (p: Provider) => void
+  anthropicModel: string
+  onAnthropicModel: (m: string) => void
+  disabled: boolean
+}) {
+  return (
+    <section className="aa-model-switcher" aria-label="Model and provider">
+      <div className="aa-card-eyebrow"><Cpu size={14} /> MODEL &amp; PROVIDER</div>
+      <div className="aa-model-switcher-row">
+        <label htmlFor="aa-provider-select">Provider</label>
+        <select
+          id="aa-provider-select"
+          value={provider}
+          disabled={disabled}
+          onChange={e => onProvider(e.target.value as Provider)}
+        >
+          <option value="anthropic">Anthropic</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+      </div>
+      {provider === 'anthropic' && (
+        <div className="aa-model-switcher-row">
+          <label htmlFor="aa-model-select">Model</label>
+          <select
+            id="aa-model-select"
+            value={anthropicModel}
+            disabled={disabled}
+            onChange={e => onAnthropicModel(e.target.value)}
+          >
+            {ANTHROPIC_MODELS.map(m => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </select>
         </div>
-      }) : tools.map((tool, idx) => <div className="aa-v5-trace-row" key={`${tool.tool}-${idx}`}><CheckCircle2 size={15}/><div><strong>{readableStep(tool.tool)}</strong><p>{tool.summary}</p></div></div>)}
-    </div>
-  </details>
+      )}
+      {provider === 'openrouter' && (
+        <p className="aa-small">Model is controlled by <code>OPENROUTER_MODEL</code> in the server environment.</p>
+      )}
+      <p className="aa-small">Changes apply to the next message.</p>
+    </section>
+  )
 }
 
 function GuidePanel() {
-  return <section className="aa-v6-guide" aria-label="Ways to investigate">
-    <div className="aa-card-eyebrow"><Sparkles size={14}/> YOUR INVESTIGATION</div>
-    <h3>Ask naturally. Go deeper.</h3>
-    <p>Describe a symptom, ask about a warning light, or check published recalls after sharing your vehicle.</p>
-    <div className="aa-v6-guide-row"><Activity size={15}/> Understand reported symptoms</div>
-    <div className="aa-v6-guide-row"><FileSearch size={15}/> Inspect official recall sources</div>
-    <div className="aa-v6-guide-row"><ShieldCheck size={15}/> Separate evidence from possibilities</div>
-    <small>AutoAssist supports investigation; it cannot diagnose a vehicle or verify outstanding VIN repairs.</small>
-  </section>
+  return (
+    <section className="aa-v6-guide" aria-label="Ways to investigate">
+      <div className="aa-card-eyebrow"><Sparkles size={14} /> YOUR INVESTIGATION</div>
+      <h3>Ask naturally. Go deeper.</h3>
+      <p>Describe a symptom, ask about a warning light, or check published recalls after sharing your vehicle.</p>
+      <div className="aa-v6-guide-row"><Activity size={15} /> Understand reported symptoms</div>
+      <div className="aa-v6-guide-row"><FileSearch size={15} /> Inspect official recall sources</div>
+      <div className="aa-v6-guide-row"><ShieldCheck size={15} /> Separate evidence from possibilities</div>
+      <small>AutoAssist supports investigation; it cannot diagnose a vehicle or verify outstanding VIN repairs.</small>
+    </section>
+  )
 }
 
-// Render only observed nodes; never fabricate tool calls or duplicate this timeline in the sidebar.
 function LiveActivity({ steps }: { steps: LiveStep[] }) {
   const completed = steps.filter(step => step.status === 'complete').length
   const active = [...steps].reverse().find(step => step.status === 'running')
-  return <details className="aa-v6-live-activity" aria-label="Observed agent execution">
-    <summary>
-      <span className="aa-v6-live-icon"><LoaderCircle size={15} className="aa-spin"/></span>
-      <span className="aa-v6-live-title">{active ? readableStep(active.name) : 'Preparing the investigation'}</span>
-      <span className="aa-v6-live-meta">{steps.length ? `${completed}/${steps.length} observed steps` : 'Connecting to agent'}</span>
-      <span className="aa-v6-live-chevron">Details</span>
-    </summary>
-    <div className="aa-v6-live-detail">
-      {steps.length === 0 ? <p>Waiting for the agent to emit its first execution event.</p> :
-        steps.map(step => <div key={step.name} className="aa-v6-live-step">
-          {step.status === 'complete' ? <CheckCircle2 size={14}/> : <LoaderCircle size={14} className="aa-spin"/>}
-          <span>{readableStep(step.name)}</span>
-          {step.durationMs !== undefined && <small>{step.durationMs} ms</small>}
-        </div>)}
+
+  return (
+    <div className="aa-v6-live-activity" aria-label="Observed agent execution">
+      <div className="aa-v6-live-summary">
+        <span className="aa-v6-live-icon">
+          <LoaderCircle size={15} className="aa-spin" />
+        </span>
+        <span className="aa-v6-live-title">
+          {active ? readableStep(active.name) : 'Investigating vehicle data'}
+        </span>
+        <span className="aa-v6-live-meta">
+          {steps.length ? `${completed}/${steps.length} steps` : 'Connecting'}
+        </span>
+      </div>
+      {steps.length > 0 && (
+        <div className="aa-v6-live-detail">
+          {steps.map(step => (
+            <div key={step.name} className="aa-v6-live-step">
+              {step.status === 'complete' ? <CheckCircle2 size={13} /> : <LoaderCircle size={13} className="aa-spin" />}
+              <span>{readableStep(step.name)}</span>
+              {step.durationMs !== undefined && <small>{step.durationMs} ms</small>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
-  </details>
+  )
 }
 
 export default function StoryWorkspace() {
@@ -178,6 +338,19 @@ export default function StoryWorkspace() {
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
   const [liveSteps, setLiveSteps] = useState<LiveStep[]>([])
+
+  const [provider, setProviderState] = useState<Provider>(() => {
+    if (typeof window === 'undefined') return 'anthropic'
+    return readProvider()
+  })
+  const [anthropicModel, setAnthropicModelState] = useState<string>(() => {
+    if (typeof window === 'undefined') return ANTHROPIC_MODELS[0].id
+    return readAnthropicModel()
+  })
+
+  function handleProviderChange(p: Provider) { saveProvider(p); setProviderState(p) }
+  function handleAnthropicModelChange(m: string) { saveAnthropicModel(m); setAnthropicModelState(m) }
+
   const liveStepsRef = useRef<LiveStep[]>([])
   const [stepsByTurn, setStepsByTurn] = useState<Record<string, LiveStep[]>>({})
   const stepsByTurnRef = useRef<Record<string, LiveStep[]>>({})
@@ -191,6 +364,8 @@ export default function StoryWorkspace() {
   const threadRef = useRef<SavedThread[]>([])
   const startedSteps = useRef<Map<string, number>>(new Map())
   const bottom = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   const state = (agent.state || {}) as UiState
   const messages = agent.messages.filter(m => m.role === 'user' || (m.role === 'assistant' && messageContent(m.content).trim().length > 0))
   const running = sending || agent.isRunning
@@ -206,13 +381,11 @@ export default function StoryWorkspace() {
     const t = threadRef.current.find(x => x.id === id)
     if (!t) return
     replaceThreads(threadRef.current.map(x => x.id === id ? {
-      ...x, updatedAt: Date.now(), messages: agent.messages.map(m => ({...m})),
+      ...x, updatedAt: Date.now(), messages: agent.messages.map(m => ({ ...m })),
       state: { ...agent.state }, stepsByTurn: { ...stepsByTurnRef.current },
     } : x))
   }
 
-  // This local-only thread list is explicit: the current InMemoryAgentRunner has
-  // no durable CopilotKit history service. Never market this as cloud persistence.
   useEffect(() => {
     if (!isReady || historyReady.current) return
     historyReady.current = true
@@ -244,9 +417,6 @@ export default function StoryWorkspace() {
           if (entries.length) setStreamEvents(previous => appendStreamItems(previous, entries))
         }
         if (!SHOW_PROVIDER_REASONING) return
-        // create_agent emits native on_chat_model_stream events. In a RAW
-        // LangChain event only provider-exposed reasoning blocks are displayed.
-        // Never synthesize reasoning or concatenate it with answer text.
         const envelope = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {}
         const raw = (envelope.rawEvent && typeof envelope.rawEvent === 'object' ? envelope.rawEvent :
           envelope.event && typeof envelope.event === 'object' ? envelope.event : envelope) as Record<string, unknown>
@@ -267,8 +437,6 @@ export default function StoryWorkspace() {
             setProviderReasoning(previous => (previous + value).slice(0, 6000))
           }
         }
-        // Older OpenRouter/LangChain versions sometimes place reasoning in
-        // provider-specific metadata instead of normalized content_blocks.
         if (!foundBlock) {
           const extra = chunk.additional_kwargs && typeof chunk.additional_kwargs === 'object' ?
             chunk.additional_kwargs as Record<string, unknown> : {}
@@ -287,8 +455,6 @@ export default function StoryWorkspace() {
           }
         }
       },
-      // The backend emits *native* AG-UI reasoning + tool events alongside RAW.
-      // Subscribe here rather than relying on RAW decoding or an env-only panel.
       onReasoningMessageContentEvent: (payload: unknown) => {
         if (!SHOW_STREAM_DEBUG) return
         const entries = parseAgUiStreamEvent(payload)
@@ -330,7 +496,7 @@ export default function StoryWorkspace() {
         setLiveSteps(next)
       },
       onCustomEvent: (payload: unknown) => {
-        const p = (payload || {}) as { event?: {name?: string; value?: unknown}; name?: string; value?: unknown }
+        const p = (payload || {}) as { event?: { name?: string; value?: unknown }; name?: string; value?: unknown }
         const evt = p.event || p
         if (evt.name !== 'autoassist_answer_delta' && evt.name !== 'autoassist_provider_reasoning_delta') return
         const data = evt.value as { text?: unknown } | undefined
@@ -354,8 +520,15 @@ export default function StoryWorkspace() {
     agent.threadId = id
     agent.setMessages([])
     agent.setState({})
-    liveStepsRef.current = []; stepsByTurnRef.current = {}
-    setStepsByTurn({}); setActiveThread(id); setLiveSteps([]); setStreamedText(''); setProviderReasoning(''); setStreamEvents([]); setError('')
+    liveStepsRef.current = []
+    stepsByTurnRef.current = {}
+    setStepsByTurn({})
+    setActiveThread(id)
+    setLiveSteps([])
+    setStreamedText('')
+    setProviderReasoning('')
+    setStreamEvents([])
+    setError('')
     replaceThreads([{ id, title: 'New investigation', updatedAt: Date.now(), messages: [], state: {} }, ...threadRef.current])
   }
 
@@ -365,8 +538,15 @@ export default function StoryWorkspace() {
     agent.threadId = entry.id
     agent.setMessages(entry.messages as Parameters<typeof agent.setMessages>[0])
     agent.setState(entry.state)
-    liveStepsRef.current = []; stepsByTurnRef.current = entry.stepsByTurn || {}
-    setStepsByTurn(stepsByTurnRef.current); setActiveThread(entry.id); setLiveSteps([]); setStreamedText(''); setProviderReasoning(''); setStreamEvents([]); setError('')
+    liveStepsRef.current = []
+    stepsByTurnRef.current = entry.stepsByTurn || {}
+    setStepsByTurn(stepsByTurnRef.current)
+    setActiveThread(entry.id)
+    setLiveSteps([])
+    setStreamedText('')
+    setProviderReasoning('')
+    setStreamEvents([])
+    setError('')
   }
 
   function deleteThread(id: string) {
@@ -382,110 +562,346 @@ export default function StoryWorkspace() {
     }
   }
 
-  useEffect(() => { bottom.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages.length, state.stage, agent.isRunning])
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length, streamedText, liveSteps.length, running])
 
   async function send(text: string) {
     const trimmed = text.trim()
     if (!trimmed || running) return
-    setError(''); setSending(true); setPrompt(''); setStreamedText(''); setProviderReasoning(''); setStreamEvents([]); setLiveSteps([])
+    setError('')
+    setSending(true)
+    setPrompt('')
+    setStreamedText('')
+    setProviderReasoning('')
+    setStreamEvents([])
+    setLiveSteps([])
     liveStepsRef.current = []
     const userTurn = messages.filter(message => message.role === 'user').length + 1
     startedSteps.current.clear()
+
     const thread = threadRef.current.find(t => t.id === activeThread)
     if (thread && thread.title === 'New investigation') {
       replaceThreads(threadRef.current.map(t => t.id === activeThread ?
         { ...t, title: trimmed.slice(0, 48) + (trimmed.length > 48 ? '…' : '') } : t))
     }
-    // Reinitialize display progress while preserving the thread's vehicle context.
-    agent.setState({ ...agent.state, stage: 'queued', plan: {}, skill: '', intent: '', classification: {}, sources: [], tool_events: [], followups: [], recall_status: 'not_queried', generation_error: null })
+
+    agent.setState({
+      ...agent.state,
+      stage: 'queued',
+      plan: {},
+      skill: '',
+      intent: '',
+      classification: {},
+      sources: [],
+      tool_events: [],
+      followups: [],
+      recall_status: 'not_queried',
+      generation_error: null,
+    })
     agent.addMessage({ id: crypto.randomUUID(), role: 'user', content: trimmed })
-    try { await copilotkit.runAgent({ agent }) }
-    catch (e) { setError(e instanceof Error ? e.message : 'Unable to contact the agent') }
-    finally {
+
+    try {
+      await copilotkit.runAgent({ agent })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to contact the agent')
+    } finally {
       const next = { ...stepsByTurnRef.current, [String(userTurn)]: liveStepsRef.current }
       stepsByTurnRef.current = next
       setStepsByTurn(next)
       saveActive(activeThread)
-      setSending(false); setStreamedText('')
+      setSending(false)
+      setStreamedText('')
     }
   }
 
-  function onSubmit(event: FormEvent) { event.preventDefault(); void send(prompt) }
-  return <div className="aa-app">
-    <nav className="aa-nav">
-      <BrandLockup/>
-      <div className="aa-nav-section-label">WORKSPACE</div>
-      <div className="aa-nav-items"><Link className="aa-nav-active" href="/" aria-current="page"><MessageCircle size={17}/> Assistant</Link><Link href="/model-lab"><BookOpen size={17}/> Model Lab</Link></div>
-      <div className="aa-history-header"><strong>Investigations</strong><button onClick={newThread} disabled={running} title="New investigation" aria-label="New investigation"><Plus size={17}/></button></div>
-      <label className="aa-history-search"><Search size={15}/><input aria-label="Search conversations" value={threadQuery} onChange={event => setThreadQuery(event.target.value)} placeholder="Search conversations"/></label>
-      <div className="aa-history-list">{threadList.filter(thread => thread.title.toLowerCase().includes(threadQuery.toLowerCase())).map(thread => <div className={`aa-history-row ${thread.id === activeThread ? 'selected' : ''}`} key={thread.id}>
-        <button className="aa-history-select" onClick={() => openThread(thread)} disabled={running} title={thread.title}>{thread.title}</button>
-        <button className="aa-history-delete" onClick={() => deleteThread(thread.id)} disabled={running} aria-label={`Delete ${thread.title}`} title="Delete saved conversation"><Trash2 size={13}/></button>
-      </div>)}</div>
-      <div className="aa-history-note">Saved in this browser for local development only.</div>
-      <div className="aa-nav-footer"><span className="aa-footer-icon"><ShieldCheck size={17}/></span><div><strong>Evidence-first AI</strong><small>Prototype · Local workspace</small></div></div>
-    </nav>
-    <main className="aa-main">
-      <header className="aa-topbar"><div className="aa-location"><span className="aa-location-icon"><MessageCircle size={16}/></span><span>Workspace</span><ArrowRight size={13}/><strong>Assistant</strong></div><div className="aa-topbar-right"><span className="aa-runtime-pill"><span className="aa-online-dot"/> LangChain agent</span></div></header>
-      <div className="aa-main-inner">
-        <div className="aa-chat-area">
-          {state.vehicle && Object.keys(state.vehicle).length > 0 && <div className="aa-vehicle-chip"><CarFront size={14}/> {[state.vehicle.year, state.vehicle.make, state.vehicle.model].filter(Boolean).join(' ')}</div>}
-          {messages.length === 0 && <section className="aa-welcome">
-            <div className="aa-welcome-icon"><Sparkles size={26}/></div>
-            <div className="aa-kicker">YOUR AUTOMOTIVE AI COPILOT</div>
-            <h1>Tell me what<br/><em>happened on the road.</em></h1>
-            <p>No forms to fill. Describe what you noticed, and I’ll help investigate the symptoms, identify your vehicle naturally, and check relevant recall evidence.</p>
-            <div className="aa-suggestions">{EXAMPLES.map((s, i) => <button key={s} onClick={() => void send(s)}><span>{['01','02','03'][i]}</span>{s}<ArrowUp size={16}/></button>)}</div>
-          </section>}
-          <div className="aa-messages" aria-live="polite">
-            {messages.map((m, idx) => <article key={m.id || idx} className={`aa-message ${m.role}`}>
-              <div className="aa-message-avatar" aria-hidden="true">{m.role === 'assistant' ? <Sparkles size={17}/> : <UserRound size={16}/>}</div>
-              <div className="aa-message-content"><div className="aa-message-name">{m.role === 'assistant' ? 'AutoAssist' : 'You'}</div>
-                <div className="aa-markdown"><ReactMarkdown>{messageContent(m.content)}</ReactMarkdown></div>
-                {m.role === 'assistant' && (() => {
-                  const userTurn = messages.slice(0, idx).filter(x => x.role === 'user').length
-                  const snapshot = state.result_history?.find(x => x.turn === userTurn)
-                  if (!snapshot) return null
-                  return <>
-                    <ResultsUI state={snapshot}/>
-                    <TurnTrace steps={stepsByTurn[String(userTurn)] || []} tools={snapshot.tool_events || []}/>
-                    {snapshot.generation_error && <p className="aa-agent-error">AI service note: {snapshot.generation_error}</p>}
-                    {(snapshot.followups || []).length > 0 && <div className="aa-followups">
-                      {snapshot.followups?.slice(0, 2).map((suggestion, n) => <button key={n} disabled={running} onClick={() => void send(suggestion)}>{suggestion}<ArrowRight size={13}/></button>)}
-                    </div>}
-                  </>
-                })()}
+  function onSubmit(event: FormEvent) {
+    event.preventDefault()
+    void send(prompt)
+  }
+
+  return (
+    <div className="aa-app">
+      <nav className="aa-nav">
+        <BrandLockup />
+        <div className="aa-nav-section-label">WORKSPACE</div>
+        <div className="aa-nav-items">
+          <Link className="aa-nav-active" href="/" aria-current="page">
+            <MessageCircle size={17} /> Assistant
+          </Link>
+          <Link href="/model-lab">
+            <BookOpen size={17} /> Model Lab
+          </Link>
+        </div>
+        <div className="aa-history-header">
+          <strong>Investigations</strong>
+          <button onClick={newThread} disabled={running} title="New investigation" aria-label="New investigation">
+            <Plus size={16} />
+          </button>
+        </div>
+        <label className="aa-history-search">
+          <Search size={14} />
+          <input
+            aria-label="Search conversations"
+            value={threadQuery}
+            onChange={event => setThreadQuery(event.target.value)}
+            placeholder="Search conversations"
+          />
+        </label>
+        <div className="aa-history-list">
+          {threadList
+            .filter(thread => thread.title.toLowerCase().includes(threadQuery.toLowerCase()))
+            .map(thread => (
+              <div className={`aa-history-row ${thread.id === activeThread ? 'selected' : ''}`} key={thread.id}>
+                <button
+                  className="aa-history-select"
+                  onClick={() => openThread(thread)}
+                  disabled={running}
+                  title={thread.title}
+                >
+                  {thread.title}
+                </button>
+                <button
+                  className="aa-history-delete"
+                  onClick={() => deleteThread(thread.id)}
+                  disabled={running}
+                  aria-label={`Delete ${thread.title}`}
+                  title="Delete saved conversation"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
-            </article>)}
-            {running && !SHOW_STREAM_DEBUG && <LiveActivity steps={liveSteps}/>}
-            {SHOW_STREAM_DEBUG && (running || streamEvents.length > 0) && <ModelStreamViewer items={streamEvents} running={running}/>}
-            {!SHOW_STREAM_DEBUG && providerReasoning && <details className="aa-provider-reasoning" aria-label="OpenRouter provider reasoning">
-              <summary><Sparkles size={14}/> Provider reasoning <span>OpenRouter · available text</span></summary>
-              <div className="aa-provider-reasoning-text">{providerReasoning}</div>
-            </details>}
-            {running && streamedText && messages[messages.length - 1]?.role === 'user' &&
-              <div className="aa-processing aa-v6-streaming" aria-label="Streaming assistant response">
-                <div className="aa-stream-bubble">
-                  <div className="aa-card-eyebrow"><span className="aa-stream-live-dot"/><Sparkles size={13}/> AutoAssist · streaming answer</div>
-                  <div className="aa-markdown"><ReactMarkdown>{streamedText}</ReactMarkdown></div>
-                  <p className="aa-v5-draft-caption">Streaming text is provisional until the agent finishes evidence checks.</p>
-                </div>
-              </div>}
-            <div ref={bottom}/>
+            ))}
+        </div>
+        <div className="aa-history-note">Local workspace sessions only.</div>
+        <div className="aa-nav-footer">
+          <span className="aa-footer-icon"><ShieldCheck size={16} /></span>
+          <div>
+            <strong>Evidence-first AI</strong>
+            <small>NHTSA safety data</small>
           </div>
-          {error && <div className="aa-error" role="alert">{error}</div>}
-          <form className="aa-composer" onSubmit={onSubmit}>
-            <textarea value={prompt} disabled={running} onChange={e => setPrompt(e.target.value)} placeholder="Describe what happened with your car…" rows={2} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(prompt) } }}/>
-            {running ? <button type="button" aria-label="Stop generation" onClick={() => copilotkit.stopAgent({agent})}><StopCircle size={19}/></button>
-              : <button type="submit" aria-label="Send message" disabled={!prompt.trim()}><ArrowUp size={19}/></button>}
-          </form>
-          <div className="aa-compose-caption"><ShieldCheck size={12}/> Decision support only · Vehicle recalls are not VIN-specific · Shift+Enter for a new line</div>
         </div>
-        <div className="aa-side-rail">
-          <GuidePanel/>
-          <section className="aa-method"><div className="aa-card-eyebrow"><Clock3 size={14}/> UNDER THE HOOD</div><strong>See how AutoAssist was built</strong><p>Explore the actual training results, model comparisons, architecture and benchmark limitations.</p><Link href="/model-lab">Explore Model Lab <ArrowRight size={15}/></Link></section>
+      </nav>
+
+      <main className="aa-main">
+        <header className="aa-topbar">
+          <div className="aa-location">
+            <span className="aa-location-icon"><Sparkles size={16} /></span>
+            <span>AutoAssist</span>
+            <ArrowRight size={12} />
+            <strong>Investigation Copilot</strong>
+          </div>
+          <div className="aa-topbar-right">
+            <span className="aa-runtime-pill">
+              <span className="aa-online-dot" /> Evidence Engine Connected
+            </span>
+          </div>
+        </header>
+
+        <div className="aa-main-inner">
+          <div className="aa-chat-area">
+            {state.vehicle && Object.keys(state.vehicle).length > 0 && (
+              <div className="aa-vehicle-chip">
+                <CarFront size={14} />
+                <span>Active vehicle context: <strong>{[state.vehicle.year, state.vehicle.make, state.vehicle.model].filter(Boolean).join(' ')}</strong></span>
+              </div>
+            )}
+
+            {messages.length === 0 && !running && (
+              <section className="aa-welcome">
+                <div className="aa-welcome-icon"><Sparkles size={28} /></div>
+                <div className="aa-kicker">AUTOMOTIVE SAFETY INTELLIGENCE</div>
+                <h1>Tell me what<br /><em>happened on the road.</em></h1>
+                <p>Describe symptoms, weird noises, warning lights, or handling changes. AutoAssist classifies the issue, cross-checks official NHTSA recall records, and explains what to inspect.</p>
+                <div className="aa-suggestions">
+                  {EXAMPLES.map((s, i) => (
+                    <button key={s} onClick={() => void send(s)}>
+                      <span>{['01', '02', '03'][i]}</span>
+                      <p>{s}</p>
+                      <ArrowUp size={16} />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <div className="aa-messages" aria-live="polite">
+              {messages.map((m, idx) => {
+                const isAssistant = m.role === 'assistant'
+                const userTurn = messages.slice(0, idx).filter(x => x.role === 'user').length
+                const snapshot = isAssistant
+                  ? (state.result_history?.find(x => x.turn === userTurn) ||
+                     (idx === messages.length - 1 ? (state.classification?.category || state.sources?.length ? state : null) : null))
+                  : null
+
+                return (
+                  <article key={m.id || idx} className={`aa-message ${m.role}`}>
+                    <div className="aa-message-avatar" aria-hidden="true">
+                      {isAssistant ? <Sparkles size={18} /> : <UserRound size={16} />}
+                    </div>
+
+                    <div className="aa-message-content">
+                      <div className="aa-message-name">
+                        <span>{isAssistant ? 'AutoAssist' : 'You'}</span>
+                        {isAssistant && <span className="aa-verified-tag">Evidence-first model</span>}
+                      </div>
+
+                      <div className="aa-markdown">
+                        <ReactMarkdown>{messageContent(m.content)}</ReactMarkdown>
+                      </div>
+
+                      {isAssistant && snapshot && (
+                        <>
+                          <ResultsUI state={snapshot} />
+                          <TurnTrace
+                            steps={stepsByTurn[String(userTurn)] || []}
+                            tools={snapshot.tool_events || []}
+                          />
+                          {snapshot.generation_error && (
+                            <p className="aa-agent-error">AI service notice: {snapshot.generation_error}</p>
+                          )}
+                          {(snapshot.followups || []).length > 0 && (
+                            <div className="aa-followups">
+                              {snapshot.followups?.slice(0, 3).map((suggestion, n) => (
+                                <button
+                                  key={n}
+                                  disabled={running}
+                                  onClick={() => void send(suggestion)}
+                                >
+                                  {suggestion}
+                                  <ArrowRight size={13} />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </article>
+                )
+              })}
+
+              {/* STREAMING ROW: Active assistant turn, aligned with all other assistant messages */}
+              {running && (
+                <article className="aa-message assistant streaming" aria-label="AutoAssist is analyzing">
+                  <div className="aa-message-avatar streaming" aria-hidden="true">
+                    <Sparkles size={18} className="aa-spin-pulse" />
+                  </div>
+
+                  <div className="aa-message-content">
+                    <div className="aa-message-name">
+                      <span>AutoAssist</span>
+                      <span className="aa-streaming-badge">
+                        <span className="aa-stream-live-dot" /> Analyzing &amp; Streaming
+                      </span>
+                    </div>
+
+                    {/* Collapsible live reasoning */}
+                    {!SHOW_STREAM_DEBUG && providerReasoning && (
+                      <details className="aa-provider-reasoning" open aria-label="OpenRouter model reasoning">
+                        <summary>
+                          <Sparkles size={14} />
+                          <span>Thought Process</span>
+                          <span className="aa-trace-pill">Live Reasoning</span>
+                        </summary>
+                        <div className="aa-provider-reasoning-text">{providerReasoning}</div>
+                      </details>
+                    )}
+
+                    {/* Live tool/agent steps */}
+                    {!SHOW_STREAM_DEBUG && liveSteps.length > 0 && (
+                      <LiveActivity steps={liveSteps} />
+                    )}
+
+                    {/* Opt-in stream telemetry viewer */}
+                    {SHOW_STREAM_DEBUG && (streamEvents.length > 0 || running) && (
+                      <ModelStreamViewer items={streamEvents} running={running} />
+                    )}
+
+                    {/* Streamed text in markdown or waiting placeholder */}
+                    {streamedText ? (
+                      <div className="aa-markdown aa-streaming-markdown">
+                        <ReactMarkdown>{streamedText}</ReactMarkdown>
+                        <span className="aa-cursor" aria-hidden="true" />
+                      </div>
+                    ) : (
+                      <div className="aa-investigating-pulse">
+                        <LoaderCircle size={15} className="aa-spin" />
+                        <span>Classifying symptoms and checking NHTSA recall database…</span>
+                      </div>
+                    )}
+                  </div>
+                </article>
+              )}
+
+              <div ref={bottom} />
+            </div>
+
+            {error && <div className="aa-error" role="alert">{error}</div>}
+
+            <form className="aa-composer" onSubmit={onSubmit}>
+              <textarea
+                ref={textareaRef}
+                value={prompt}
+                disabled={running}
+                onChange={e => setPrompt(e.target.value)}
+                placeholder="Ask about a warning light, symptom, or vehicle recall…"
+                rows={1}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void send(prompt)
+                  }
+                }}
+              />
+              {running ? (
+                <button
+                  type="button"
+                  className="aa-composer-stop-btn"
+                  aria-label="Stop generation"
+                  onClick={() => copilotkit.stopAgent({ agent })}
+                >
+                  <StopCircle size={18} />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="aa-composer-send-btn"
+                  aria-label="Send message"
+                  disabled={!prompt.trim()}
+                >
+                  <ArrowUp size={18} />
+                </button>
+              )}
+            </form>
+            <div className="aa-compose-caption">
+              <ShieldCheck size={12} />
+              <span>AutoAssist supports investigation; it cannot provide mechanical diagnoses or verify VIN repair status.</span>
+            </div>
+          </div>
+
+          <div className="aa-side-rail">
+            <GuidePanel />
+            <ModelSwitcher
+              provider={provider}
+              onProvider={handleProviderChange}
+              anthropicModel={anthropicModel}
+              onAnthropicModel={handleAnthropicModelChange}
+              disabled={running}
+            />
+            <section className="aa-method">
+              <div className="aa-card-eyebrow">
+                <Clock3 size={14} /> UNDER THE HOOD
+              </div>
+              <strong>See how AutoAssist was built</strong>
+              <p>Explore the offline training benchmarks, DistilBERT vs TF-IDF comparisons, and recall retrieval latency.</p>
+              <Link href="/model-lab">
+                Explore Model Lab <ArrowRight size={14} />
+              </Link>
+            </section>
+          </div>
         </div>
-      </div>
-    </main>
-  </div>
+      </main>
+    </div>
+  )
 }

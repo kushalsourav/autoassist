@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ''
     openrouter_model: str = ''
     openrouter_timeout_seconds: float = Field(default=90, ge=5, le=180)
+    # Anthropic (default provider)
+    anthropic_api_key: str = ''
+    anthropic_model: str = 'claude-haiku-5-5'
+    anthropic_max_tokens: int = Field(default=4096, ge=256, le=32768)
+    anthropic_timeout_seconds: float = Field(default=90, ge=5, le=180)
+    # Active provider: 'anthropic' (default) | 'openrouter'
+    autoassist_provider: str = 'anthropic'
     cors_origins: str = 'http://localhost:3000'
     rag_backend: str = 'tfidf'  # Set to faiss after installing optional RAG dependencies
     rag_min_similarity: float = Field(default=0.35, ge=0, le=1)

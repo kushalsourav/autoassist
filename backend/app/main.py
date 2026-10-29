@@ -1,5 +1,6 @@
 from uuid import UUID
 import json
+import os
 import httpx
 from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,8 +63,16 @@ def health():
                   else 'distilbert_artifact_missing')
     else:
         status = 'trained_tfidf_logreg' if settings.model_file.exists() else 'keyword_demo_only'
+    provider = os.getenv('AUTOASSIST_PROVIDER', settings.autoassist_provider or 'anthropic').lower()
+    if provider == 'anthropic':
+        llm_configured = bool(os.getenv('ANTHROPIC_API_KEY', settings.anthropic_api_key))
+    else:
+        llm_configured = bool(settings.openrouter_api_key and settings.openrouter_model)
     return {'status': 'ok', 'model': status, 'storage': settings.storage_mode,
-            'llm_configured': bool(settings.openrouter_api_key and settings.openrouter_model)}
+            'llm_provider': provider,
+            'llm_model': (os.getenv('ANTHROPIC_MODEL', settings.anthropic_model)
+                          if provider == 'anthropic' else settings.openrouter_model),
+            'llm_configured': llm_configured}
 
 
 @app.get('/api/metrics')
