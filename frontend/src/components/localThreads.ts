@@ -5,6 +5,8 @@ export type SavedThread = {
   updatedAt: number
   messages: unknown[]
   state: Record<string, unknown>
+  // Per-turn client-observed AG-UI node events (optional for older threads).
+  stepsByTurn?: Record<string, Array<{ name: string; status: 'running' | 'complete'; started: number; durationMs?: number }>>
 }
 
 const KEY = 'autoassist.dev.threads.v1'

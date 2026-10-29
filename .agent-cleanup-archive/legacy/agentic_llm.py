@@ -83,16 +83,49 @@ def decode_json_object(raw: str) -> dict[str, Any]:
     return obj
 
 
-async def stream_chat(messages: list[dict[str, str]], *, max_tokens: int = 1100,
-                      temperature: float = 0.2):
-    """Yield only user-visible OpenRouter text deltas from an SSE chat completion.
+def _reasoning_text(delta: dict[str, Any]) -> str:
+    """Extract readable provider-supplied reasoning, never encrypted/redacted fields.
 
-    Deliberately ignores provider reasoning fields; reports both HTTP and midstream
-    errors without leaking tokens or the API key. Planning still uses chat().
+    OpenRouter may send both reasoning_details and the legacy reasoning string.
+    Prefer the structured field to avoid duplicating the same chunk.
+    """
+    details = delta.get('reasoning_details')
+    readable: list[str] = []
+    if isinstance(details, list):
+        for item in details:
+            if not isinstance(item, dict):
+                continue
+            if item.get('type') not in ('reasoning.text', 'reasoning.summary'):
+                continue
+            value = item.get('text') if item['type'] == 'reasoning.text' else item.get('summary')
+            if isinstance(value, str) and value.strip() and '[REDACTED]' not in value:
+                readable.append(value)
+    if readable:
+        return ''.join(readable)
+    if isinstance(details, list) and details:
+        # Some providers send encrypted or redacted entries; do not fall back to a
+        # possibly duplicated or redacted legacy field when details are present.
+        return ''
+    legacy = delta.get('reasoning')
+    return legacy if isinstance(legacy, str) and '[REDACTED]' not in legacy else ''
+
+
+async def stream_chat_events(messages: list[dict[str, str]], *, max_tokens: int = 1100,
+                             temperature: float = 0.2, include_reasoning: bool = False):
+    """Emit separate answer/reasoning SSE deltas from OpenRouter.
+
+    Reasoning is opt-in. It is provider-exposed text, not guaranteed internal thought.
+    Encrypted/redacted reasoning is never surfaced. Final response requires answer text.
     """
     if not (settings.openrouter_api_key and settings.openrouter_model):
         raise AgentLLMError('OpenRouter is not configured for the agent server.')
-    yielded = False
+    body: dict[str, Any] = {
+        'model': settings.openrouter_model, 'messages': messages,
+        'temperature': temperature, 'max_tokens': max_tokens, 'stream': True,
+    }
+    if include_reasoning:
+        body['reasoning'] = {'enabled': True, 'effort': 'low', 'exclude': False}
+    answered = False
     done = False
     try:
         async with httpx.AsyncClient(timeout=settings.openrouter_timeout_seconds) as client:
@@ -101,8 +134,7 @@ async def stream_chat(messages: list[dict[str, str]], *, max_tokens: int = 1100,
                 headers={'Authorization': f'Bearer {settings.openrouter_api_key}',
                          'Content-Type': 'application/json',
                          'Accept': 'text/event-stream', 'X-Title': 'AutoAssist agent'},
-                json={'model': settings.openrouter_model, 'messages': messages,
-                      'temperature': temperature, 'max_tokens': max_tokens, 'stream': True},
+                json=body,
             ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
@@ -125,14 +157,20 @@ async def stream_chat(messages: list[dict[str, str]], *, max_tokens: int = 1100,
                     if choices[0].get('finish_reason') == 'error':
                         raise AgentLLMError('OpenRouter stopped while streaming the response.')
                     delta = choices[0].get('delta') or {}
+                    if not isinstance(delta, dict):
+                        continue
+                    if include_reasoning:
+                        explanation = _reasoning_text(delta)
+                        if explanation:
+                            yield {'kind': 'reasoning', 'text': explanation}
                     content = delta.get('content', '')
                     if isinstance(content, list):
                         content = ''.join(str(part.get('text', '')) for part in content
                                           if isinstance(part, dict) and part.get('type') == 'text')
                     if isinstance(content, str) and content:
-                        yielded = True
-                        yield content
-                if not yielded:
+                        answered = True
+                        yield {'kind': 'answer', 'text': content}
+                if not answered:
                     raise AgentLLMError('OpenRouter streamed no visible answer text.')
                 if not done:
                     raise AgentLLMError('OpenRouter response stream ended unexpectedly.')
@@ -142,3 +180,11 @@ async def stream_chat(messages: list[dict[str, str]], *, max_tokens: int = 1100,
         raise AgentLLMError('OpenRouter timed out during streaming.') from exc
     except httpx.RequestError as exc:
         raise AgentLLMError('Unable to stream from OpenRouter.') from exc
+
+
+async def stream_chat(messages: list[dict[str, str]], *, max_tokens: int = 1100,
+                      temperature: float = 0.2):
+    """Backward-compatible answer-only interface (V3-V6 regression tests)."""
+    async for event in stream_chat_events(messages, max_tokens=max_tokens, temperature=temperature):
+        if event['kind'] == 'answer':
+            yield event['text']

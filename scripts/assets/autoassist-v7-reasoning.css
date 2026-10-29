@@ -1,0 +1,41 @@
+/* V7: Optional provider-supplied reasoning, visually separated from answer. */
+.aa-provider-reasoning {
+  max-width: 750px;
+  margin: 8px 0 14px 42px;
+  border: 1px solid rgba(88, 95, 170, .18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(239, 240, 255, .85), rgba(232, 247, 245, .55));
+  overflow: hidden;
+  color: var(--aa-text, #263046);
+}
+.aa-provider-reasoning summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 16px;
+  cursor: pointer;
+  font-size: .82rem;
+  font-weight: 650;
+  list-style: none;
+}
+.aa-provider-reasoning summary::-webkit-details-marker { display: none; }
+.aa-provider-reasoning summary span {
+  margin-left: auto;
+  opacity: .65;
+  font-weight: 450;
+  font-size: .73rem;
+}
+.aa-provider-reasoning-text {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-top: 1px solid rgba(88, 95, 170, .12);
+  padding: 14px 16px;
+  font-size: .8rem;
+  line-height: 1.65;
+}
+@media (max-width: 700px) {
+  .aa-provider-reasoning { margin-left: 0; }
+  .aa-provider-reasoning summary span { display: none; }
+}

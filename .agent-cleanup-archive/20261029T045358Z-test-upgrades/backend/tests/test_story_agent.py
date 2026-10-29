@@ -106,11 +106,12 @@ async def test_invalid_json_retried_then_explicit_error(monkeypatch):
     assert len(calls) == 2
 
 
-def test_story_graph_has_semantic_router_without_hardcoded_vehicle_import():
+def test_live_story_graph_uses_langchain_create_agent():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[2] / 'agent/story_agent.py').read_text()
-    assert 'make_plan(' in source
-    assert "'understand_request'" in source
+    assert 'create_agent(' in source
+    assert 'ChatOpenRouter(' in source
+    assert 'StateGraph(' not in source
     assert 'story_vehicle' not in source
     assert '_SYMPTOM' not in source
 
